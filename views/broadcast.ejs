@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Broadcast - FM Radio Live</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body class="broadcast-page">
+  <nav class="navbar">
+    <div class="nav-brand">
+      <i class="fas fa-broadcast-tower"></i>
+      <span>FM Radio Live</span>
+    </div>
+    <div class="nav-links">
+      <a href="/" class="nav-link">Home</a>
+      <span class="nav-user" id="userDisplay"></span>
+      <button onclick="logout()" class="btn btn-secondary btn-sm">Logout</button>
+    </div>
+  </nav>
+
+  <main class="broadcast-container">
+    <div class="broadcast-panel">
+      <div class="broadcast-header">
+        <h2><i class="fas fa-microphone"></i> Your Broadcast</h2>
+        <div class="broadcast-status" id="broadcastStatus">
+          <span class="status-dot offline"></span>
+          <span>Offline</span>
+        </div>
+      </div>
+
+      <div class="mic-container">
+        <button id="micButton" class="mic-button" onclick="toggleBroadcast()">
+          <i class="fas fa-microphone"></i>
+          <div class="mic-ripple" id="micRipple"></div>
+        </button>
+        <p class="mic-hint" id="micHint">Press to start broadcasting</p>
+      </div>
+
+      <div class="broadcast-stats">
+        <div class="stat">
+          <i class="fas fa-headphones"></i>
+          <span id="listenerCount">0</span>
+          <label>Listeners</label>
+        </div>
+        <div class="stat">
+          <i class="fas fa-clock"></i>
+          <span id="broadcastTime">00:00:00</span>
+          <label>Duration</label>
+        </div>
+      </div>
+
+      <div class="audio-visualizer" id="audioVisualizer">
+        <canvas id="visualizerCanvas"></canvas>
+      </div>
+    </div>
+
+    <div class="listeners-panel">
+      <h3><i class="fas fa-users"></i> Current Listeners</h3>
+      <div id="listenersList" class="listeners-list">
+        <p class="no-listeners">No listeners yet</p>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/broadcast.js"></script>
+</body>
+</html>

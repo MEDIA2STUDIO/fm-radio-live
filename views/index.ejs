@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FM Radio Live</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="nav-brand">
+      <i class="fas fa-broadcast-tower"></i>
+      <span>FM Radio Live</span>
+    </div>
+    <div class="nav-links">
+      <a href="/" class="nav-link">Home</a>
+      <a href="/listen" class="nav-link">Listen</a>
+      <a href="/login" class="nav-link">Login</a>
+      <a href="/signup" class="nav-link btn-primary">Sign Up</a>
+    </div>
+    <button class="mobile-menu-btn" onclick="toggleMobileMenu()">
+      <i class="fas fa-bars"></i>
+    </button>
+  </nav>
+
+  <main class="container">
+    <section class="hero">
+      <div class="hero-content">
+        <div class="radio-icon">
+          <i class="fas fa-broadcast-tower"></i>
+          <div class="pulse-ring"></div>
+          <div class="pulse-ring delay-1"></div>
+          <div class="pulse-ring delay-2"></div>
+        </div>
+        <h1>FM Radio Live</h1>
+        <p class="tagline">Your voice, broadcasted to the world</p>
+        <div class="hero-buttons">
+          <a href="/signup" class="btn btn-primary btn-lg">
+            <i class="fas fa-microphone"></i> Start Broadcasting
+          </a>
+          <a href="/listen" class="btn btn-secondary btn-lg">
+            <i class="fas fa-headphones"></i> Listen Now
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <section class="live-section">
+      <h2><i class="fas fa-circle pulse-dot"></i> Live Now</h2>
+      <div id="live-broadcasters" class="broadcasters-grid">
+        <p class="loading">Loading live broadcasts...</p>
+      </div>
+    </section>
+
+    <section class="features">
+      <div class="feature">
+        <i class="fas fa-microphone-alt"></i>
+        <h3>Broadcast Live</h3>
+        <p>Go live with just one click. Share your voice with the world.</p>
+      </div>
+      <div class="feature">
+        <i class="fas fa-headphones-alt"></i>
+        <h3>Listen Anywhere</h3>
+        <p>Tune in from anywhere. No login required to listen.</p>
+      </div>
+      <div class="feature">
+        <i class="fas fa-users"></i>
+        <h3>Real-time Audience</h3>
+        <p>See how many people are listening to you live.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>&copy; 2024 FM Radio Live. All rights reserved.</p>
+  </footer>
+
+  <script src="/js/app.js"></script>
+  <script>
+    loadLiveBroadcasters();
+  </script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Listen - FM Radio Live</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body class="listen-page">
+  <nav class="navbar">
+    <div class="nav-brand">
+      <i class="fas fa-broadcast-tower"></i>
+      <span>FM Radio Live</span>
+    </div>
+    <div class="nav-links">
+      <a href="/" class="nav-link">Home</a>
+      <a href="/login" class="nav-link">Login</a>
+    </div>
+  </nav>
+
+  <main class="listen-container">
+    <div class="listen-header">
+      <h1><i class="fas fa-headphones"></i> Live Broadcasts</h1>
+      <p>Tune in to live broadcasts from broadcasters around the world</p>
+    </div>
+
+    <div id="broadcastersList" class="broadcasters-list">
+      <div class="loading-spinner">
+        <i class="fas fa-spinner fa-spin"></i>
+        <p>Searching for live broadcasts...</p>
+      </div>
+    </div>
+
+    <div class="no-broadcasts" id="noBroadcasts" style="display: none;">
+      <i class="fas fa-satellite-dish"></i>
+      <h3>No Live Broadcasts</h3>
+      <p>Check back later or <a href="/signup">become a broadcaster</a></p>
+    </div>
+  </main>
+
+  <script src="/js/listen.js"></script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Login - FM Radio Live</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body class="auth-page admin-auth">
+  <div class="auth-container">
+    <div class="auth-card admin-card">
+      <div class="auth-header">
+        <i class="fas fa-shield-alt"></i>
+        <h1>Admin Panel</h1>
+        <p>Login to manage the platform</p>
+      </div>
+      <form id="loginForm" class="auth-form">
+        <div class="form-group">
+          <label for="username">
+            <i class="fas fa-user-shield"></i> Admin Username
+          </label>
+          <input type="text" id="username" name="username" required placeholder="Enter admin username">
+        </div>
+        <div class="form-group">
+          <label for="password">
+            <i class="fas fa-lock"></i> Password
+          </label>
+          <input type="password" id="password" name="password" required placeholder="Enter password">
+        </div>
+        <div id="error-message" class="error-message" style="display: none;"></div>
+        <button type="submit" class="btn btn-danger btn-block">
+          <i class="fas fa-sign-in-alt"></i> Admin Login
+        </button>
+      </form>
+      <div class="auth-footer">
+        <p><a href="/login">Back to User Login</a></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorDiv = document.getElementById('error-message');
+      errorDiv.style.display = 'none';
+
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          if (data.user.role === 'admin') {
+            window.location.href = '/admin';
+          } else {
+            errorDiv.textContent = 'This account is not an admin account';
+            errorDiv.style.display = 'block';
+          }
+        } else {
+          errorDiv.textContent = data.error || 'Login failed';
+          errorDiv.style.display = 'block';
+        }
+      } catch (error) {
+        errorDiv.textContent = 'Server error. Please try again.';
+        errorDiv.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>

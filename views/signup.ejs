@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign Up - FM Radio Live</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body class="auth-page">
+  <div class="auth-container">
+    <div class="auth-card">
+      <div class="auth-header">
+        <i class="fas fa-broadcast-tower"></i>
+        <h1>Join FM Radio</h1>
+        <p>Create your account and start broadcasting</p>
+      </div>
+      <form id="signupForm" class="auth-form">
+        <div class="form-group">
+          <label for="username">
+            <i class="fas fa-user"></i> Username
+          </label>
+          <input type="text" id="username" name="username" required placeholder="Choose a username">
+        </div>
+        <div class="form-group">
+          <label for="email">
+            <i class="fas fa-envelope"></i> Email
+          </label>
+          <input type="email" id="email" name="email" required placeholder="Enter your email">
+        </div>
+        <div class="form-group">
+          <label for="displayName">
+            <i class="fas fa-id-card"></i> Display Name
+          </label>
+          <input type="text" id="displayName" name="displayName" placeholder="Your public name">
+        </div>
+        <div class="form-group">
+          <label for="location">
+            <i class="fas fa-map-marker-alt"></i> Location
+          </label>
+          <input type="text" id="location" name="location" placeholder="Your city/location">
+        </div>
+        <div class="form-group">
+          <label for="password">
+            <i class="fas fa-lock"></i> Password
+          </label>
+          <input type="password" id="password" name="password" required placeholder="Create a password" minlength="6">
+        </div>
+        <div id="error-message" class="error-message" style="display: none;"></div>
+        <button type="submit" class="btn btn-primary btn-block">
+          <i class="fas fa-user-plus"></i> Sign Up
+        </button>
+      </form>
+      <div class="auth-footer">
+        <p>Already have an account? <a href="/login">Login</a></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('signupForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorDiv = document.getElementById('error-message');
+      errorDiv.style.display = 'none';
+
+      const formData = {
+        username: document.getElementById('username').value,
+        email: document.getElementById('email').value,
+        displayName: document.getElementById('displayName').value,
+        location: document.getElementById('location').value,
+        password: document.getElementById('password').value
+      };
+
+      try {
+        const res = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          window.location.href = '/broadcast';
+        } else {
+          errorDiv.textContent = data.error || 'Signup failed';
+          errorDiv.style.display = 'block';
+        }
+      } catch (error) {
+        errorDiv.textContent = 'Server error. Please try again.';
+        errorDiv.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>
