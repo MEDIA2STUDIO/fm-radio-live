@@ -31,7 +31,6 @@ app.use('/api/broadcast', broadcastRoutes);
 // Pages
 app.get('/', (req, res) => res.render('index'));
 app.get('/login', (req, res) => res.render('login'));
-app.get('/signup', (req, res) => res.render('signup'));
 app.get('/listen', (req, res) => res.render('listen'));
 app.get('/broadcast', verifyToken, (req, res) => res.render('broadcast'));
 app.get('/admin', verifyToken, verifyAdmin, (req, res) => res.render('admin'));

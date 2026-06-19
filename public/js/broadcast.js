@@ -10,12 +10,18 @@ let timerInterval = null;
 async function init() {
   try {
     const res = await fetch('/api/auth/me');
+    if (!res.ok) {
+      window.location.href = '/login';
+      return;
+    }
     const data = await res.json();
     if (data.user) {
       document.getElementById('userDisplay').textContent = `Welcome, ${data.user.display_name || data.user.username}`;
+    } else {
+      window.location.href = '/login';
     }
   } catch (error) {
-    window.location.href = '/login';
+    // Don't redirect on network errors, just show the page
   }
 }
 

@@ -37,7 +37,7 @@ router.post('/signup', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    res.cookie('token', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
+    res.cookie('token', token, { httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 });
     res.json({ success: true, token, user: { id: userId, username, role: 'broadcaster' } });
   } catch (error) {
     console.error('Signup error:', error.message, error.stack);
@@ -75,7 +75,7 @@ router.post('/login', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    res.cookie('token', token, { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
+    res.cookie('token', token, { httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 });
     res.json({
       success: true,
       token,
