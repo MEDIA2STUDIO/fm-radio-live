@@ -1,18 +1,18 @@
 let audioContext = null;
 let audioQueue = [];
 let isPlaying = false;
+let nextPlayTime = 0;
+let currentBroadcasterId = null;
 
 async function init() {
   await loadBroadcasters();
 
-  // Check if specific broadcaster requested
   const params = new URLSearchParams(window.location.search);
   const broadcasterId = params.get('broadcaster');
   if (broadcasterId) {
     listenToBroadcaster(broadcasterId);
   }
 
-  // Refresh list every 5 seconds
   setInterval(loadBroadcasters, 5000);
 }
 
@@ -54,7 +54,6 @@ async function loadBroadcasters() {
 
 async function listenToBroadcaster(broadcasterId) {
   try {
-    // Get broadcaster info
     const res = await fetch('/api/live');
     const data = await res.json();
     const broadcaster = data.broadcasters.find(b => b.id == broadcasterId);
@@ -64,14 +63,17 @@ async function listenToBroadcaster(broadcasterId) {
       return;
     }
 
-    // Create audio player
+    currentBroadcasterId = broadcasterId;
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${protocol}//${window.location.host}?type=listener&broadcasterId=${broadcasterId}`);
+    ws.binaryType = 'arraybuffer';
 
-    // Create audio context
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    nextPlayTime = 0;
+    audioQueue = [];
+    isPlaying = true;
 
-    // Create player UI
     const playerHtml = `
       <div class="player-container" id="player-${broadcasterId}">
         <div class="player-header">
@@ -100,30 +102,45 @@ async function listenToBroadcaster(broadcasterId) {
       </div>
     `;
 
-    // Add player to page
     const container = document.getElementById('broadcastersList');
     const existingPlayer = document.querySelector('.player-container');
     if (existingPlayer) existingPlayer.remove();
     container.insertAdjacentHTML('beforebegin', playerHtml);
 
-    // Handle audio data
-    ws.onmessage = async (e) => {
-      if (e.data instanceof Blob) {
-        const arrayBuffer = await e.data.arrayBuffer();
-        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    ws.onmessage = (e) => {
+      if (!(e.data instanceof ArrayBuffer)) return;
 
-        const source = audioContext.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(audioContext.destination);
-        source.start();
+      try {
+        const view = new DataView(e.data);
+        const sampleRate = view.getUint32(0, true);
+        const numSamples = view.getUint32(4, true);
+
+        if (numSamples <= 0 || numSamples > 65536) return;
+
+        const float32 = new Float32Array(numSamples);
+        for (let i = 0; i < numSamples; i++) {
+          const int16 = view.getInt16(8 + i * 2, true);
+          float32[i] = int16 / (int16 < 0 ? 0x8000 : 0x7FFF);
+        }
+
+        const audioBuffer = audioContext.createBuffer(1, numSamples, sampleRate || audioContext.sampleRate);
+        audioBuffer.getChannelData(0).set(float32);
+
+        scheduleBuffer(audioBuffer);
+      } catch (err) {
+        console.error('Audio decode error:', err);
       }
     };
 
     ws.onclose = () => {
       console.log('Disconnected from broadcaster');
+      isPlaying = false;
     };
 
-    // Visualize
+    ws.onerror = (err) => {
+      console.error('WebSocket error:', err);
+    };
+
     visualizePlayer(broadcasterId);
 
   } catch (error) {
@@ -132,9 +149,29 @@ async function listenToBroadcaster(broadcasterId) {
   }
 }
 
+function scheduleBuffer(audioBuffer) {
+  const now = audioContext.currentTime;
+
+  if (nextPlayTime < now) {
+    nextPlayTime = now + 0.05;
+  }
+
+  const source = audioContext.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(audioContext.destination);
+  source.start(nextPlayTime);
+
+  nextPlayTime += audioBuffer.duration;
+}
+
 function stopListening(broadcasterId) {
   const player = document.getElementById(`player-${broadcasterId}`);
   if (player) player.remove();
+
+  isPlaying = false;
+  currentBroadcasterId = null;
+  audioQueue = [];
+  nextPlayTime = 0;
 
   if (audioContext) {
     audioContext.close();
@@ -150,6 +187,7 @@ function visualizePlayer(broadcasterId) {
   const bars = 50;
 
   function draw() {
+    if (!isPlaying) return;
     requestAnimationFrame(draw);
 
     ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';

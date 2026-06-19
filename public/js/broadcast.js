@@ -2,11 +2,11 @@ let ws = null;
 let mediaStream = null;
 let audioContext = null;
 let analyser = null;
+let scriptProcessor = null;
 let isBroadcasting = false;
 let startTime = null;
 let timerInterval = null;
 
-// Get user info
 async function init() {
   try {
     const res = await fetch('/api/auth/me');
@@ -29,58 +29,71 @@ async function toggleBroadcast() {
 
 async function startBroadcast() {
   try {
-    // Get microphone access
     mediaStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: true,
         noiseSuppression: true,
-        autoGainControl: true
+        autoGainControl: true,
+        sampleRate: 44100
       }
     });
 
-    // Create audio context for visualization
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
     analyser = audioContext.createAnalyser();
-    const source = audioContext.createMediaStreamSource(mediaStream);
-    source.connect(analyser);
     analyser.fftSize = 256;
 
-    // Connect to WebSocket
+    const source = audioContext.createMediaStreamSource(mediaStream);
+    source.connect(analyser);
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const user = await getUser();
     ws = new WebSocket(`${protocol}//${window.location.host}?type=broadcaster&userId=${user.id}`);
+    ws.binaryType = 'arraybuffer';
 
     ws.onopen = () => {
       console.log('WebSocket connected');
       isBroadcasting = true;
       updateUI(true);
 
-      // Start streaming audio
-      const mediaRecorder = new MediaRecorder(mediaStream, {
-        mimeType: 'audio/webm;codecs=opus'
-      });
+      const bufferSize = 4096;
+      scriptProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
 
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
-          ws.send(e.data);
+      source.connect(scriptProcessor);
+      scriptProcessor.connect(audioContext.destination);
+
+      scriptProcessor.onaudioprocess = (e) => {
+        if (!isBroadcasting || ws.readyState !== WebSocket.OPEN) return;
+
+        const inputData = e.inputBuffer.getChannelData(0);
+        const sampleRate = audioContext.sampleRate;
+
+        const numSamples = inputData.length;
+        const buffer = new ArrayBuffer(8 + numSamples * 2);
+        const view = new DataView(buffer);
+
+        view.setUint32(0, sampleRate, true);
+        view.setUint32(4, numSamples, true);
+
+        for (let i = 0; i < numSamples; i++) {
+          const sample = Math.max(-1, Math.min(1, inputData[i]));
+          view.setInt16(8 + i * 2, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
         }
+
+        ws.send(buffer);
       };
 
-      mediaRecorder.start(100); // Send data every 100ms
-
-      // Start timer
       startTime = Date.now();
       timerInterval = setInterval(updateTimer, 1000);
-
-      // Start visualization
       visualize();
     };
 
     ws.onmessage = (e) => {
-      const data = JSON.parse(e.data);
-      if (data.type === 'listener_count') {
-        document.getElementById('listenerCount').textContent = data.count;
-      }
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type === 'listener_count') {
+          document.getElementById('listenerCount').textContent = data.count;
+        }
+      } catch (err) {}
     };
 
     ws.onclose = () => {
@@ -94,25 +107,27 @@ async function startBroadcast() {
 }
 
 function stopBroadcast() {
-  // Stop media stream
+  if (scriptProcessor) {
+    scriptProcessor.disconnect();
+    scriptProcessor.onaudioprocess = null;
+    scriptProcessor = null;
+  }
+
   if (mediaStream) {
     mediaStream.getTracks().forEach(track => track.stop());
     mediaStream = null;
   }
 
-  // Close WebSocket
   if (ws) {
     ws.close();
     ws = null;
   }
 
-  // Stop timer
   if (timerInterval) {
     clearInterval(timerInterval);
     timerInterval = null;
   }
 
-  // Stop audio context
   if (audioContext) {
     audioContext.close();
     audioContext = null;
@@ -121,7 +136,6 @@ function stopBroadcast() {
   isBroadcasting = false;
   updateUI(false);
 
-  // Notify server
   fetch('/api/broadcast/stop', { method: 'POST' });
 }
 
@@ -204,5 +218,4 @@ async function logout() {
   window.location.href = '/';
 }
 
-// Initialize
 init();
