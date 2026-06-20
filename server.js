@@ -9,7 +9,6 @@ const adminRoutes = require('./routes/admin');
 const broadcastRoutes = require('./routes/broadcast');
 const { verifyToken, verifyAdmin } = require('./middleware/auth');
 const { PersistentBroadcast, persistentBroadcasts, savedPlaylists } = require('./persistent-broadcast');
-const fs = require('fs');
 const multer = require('multer');
 
 const app = express();
@@ -39,16 +38,8 @@ app.get('/broadcast', verifyToken, (req, res) => res.render('broadcast'));
 app.get('/admin', verifyToken, verifyAdmin, (req, res) => res.render('admin'));
 app.get('/admin/login', (req, res) => res.render('admin-login'));
 
-// Multer config for MP3 upload
-const uploadDir = path.join(__dirname, 'public', 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
-});
-const upload = multer({ storage, fileFilter: (req, file, cb) => {
+// Multer config for MP3 upload (memory storage → saved to DB for persistence)
+const upload = multer({ storage: multer.memoryStorage(), fileFilter: (req, file, cb) => {
   if (file.mimetype.includes('audio') || file.originalname.endsWith('.mp3')) cb(null, true);
   else cb(new Error('Only audio files allowed'), false);
 }});
@@ -246,15 +237,71 @@ app.get('/api/tts', async (req, res) => {
   }
 });
 
-// File upload endpoint
+// File upload endpoint (saves to DB for persistence across restarts)
 app.post('/api/upload', verifyToken, (req, res) => {
-  upload.single('file')(req, res, (err) => {
-    if (err) {
-      return res.status(400).json({ error: err.message || 'Upload failed' });
-    }
+  upload.single('file')(req, res, async (err) => {
+    if (err) return res.status(400).json({ error: err.message || 'Upload failed' });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    res.json({ success: true, path: '/uploads/' + req.file.filename, name: req.file.originalname });
+    try {
+      const db = await getDb();
+      db.run('INSERT INTO uploaded_files (user_id, filename, data) VALUES (?, ?, ?)',
+        [req.user.id, req.file.originalname, new Uint8Array(req.file.buffer)]);
+      const id = db.lastInsertRowid();
+      res.json({ success: true, path: `/api/file/${id}`, name: req.file.originalname });
+    } catch (e) {
+      res.status(500).json({ error: 'Database error' });
+    }
   });
+});
+
+// Serve uploaded files from DB (no auth — ffmpeg needs to download them)
+app.get('/api/file/:id', async (req, res) => {
+  try {
+    const db = await getDb();
+    const file = db.get('SELECT * FROM uploaded_files WHERE id = ?', [req.params.id]);
+    if (!file) return res.status(404).json({ error: 'File not found' });
+    res.set('Content-Type', 'audio/mpeg');
+    res.set('Content-Disposition', `inline; filename="${file.filename}"`);
+    res.send(Buffer.from(file.data));
+  } catch (e) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Import from Google Drive (downloads from GDrive, stores in DB, returns /api/file/ID)
+app.post('/api/import-gdrive', verifyToken, async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'Google Drive URL required' });
+    const match = url.match(/\/file\/d\/([^/?#&]+)/);
+    if (!match) return res.status(400).json({ error: 'Invalid Google Drive URL. Use format: https://drive.google.com/file/d/FILE_ID/view' });
+    const fileId = match[1];
+
+    async function downloadFromGDrive(id, confirm) {
+      let dlUrl = `https://docs.google.com/uc?export=download&id=${id}`;
+      if (confirm) dlUrl += `&confirm=${confirm}`;
+      const resp = await fetch(dlUrl, { redirect: 'follow' });
+      const ct = resp.headers.get('content-type') || '';
+      if (ct.includes('text/html') && !confirm) {
+        const html = await resp.text();
+        const cfMatch = html.match(/confirm=([a-zA-Z0-9_-]+)/);
+        if (cfMatch) return downloadFromGDrive(id, cfMatch[1]);
+      }
+      const ab = await resp.arrayBuffer();
+      const cd = resp.headers.get('content-disposition') || '';
+      const fnMatch = cd.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+      return { buffer: ab, filename: fnMatch ? fnMatch[1].replace(/['"]/g, '') : `${id}.mp3` };
+    }
+
+    const result = await downloadFromGDrive(fileId);
+    const db = await getDb();
+    db.run('INSERT INTO uploaded_files (user_id, filename, data) VALUES (?, ?, ?)',
+      [req.user.id, result.filename, new Uint8Array(result.buffer)]);
+    const insertId = db.lastInsertRowid();
+    res.json({ success: true, path: `/api/file/${insertId}`, name: result.filename });
+  } catch (e) {
+    res.status(500).json({ error: 'Import failed: ' + e.message });
+  }
 });
 
 // Get persistent broadcast status for current user

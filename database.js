@@ -93,6 +93,17 @@ async function initialize() {
     )
   `);
 
+  sqlDb.run(`
+    CREATE TABLE IF NOT EXISTS uploaded_files (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      filename TEXT NOT NULL,
+      data BLOB,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+  `);
+
   // Create admin user if not exists
   const adminCheck = sqlDb.exec("SELECT id FROM users WHERE role = 'admin'");
   if (!adminCheck.length || adminCheck[0].values.length === 0) {

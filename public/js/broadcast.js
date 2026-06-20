@@ -243,6 +243,35 @@ function addUrlToPlaylist() {
   savePlaylistToServer();
 }
 
+async function importFromDrive() {
+  const input = document.getElementById('playlistGdriveInput');
+  const url = input.value.trim();
+  if (!url) return;
+  const btn = input.nextElementSibling;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing...';
+  try {
+    const res = await fetch('/api/import-gdrive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    const data = await res.json();
+    if (data.success) {
+      playlist.push({ id: Date.now() + Math.random(), name: data.name, src: data.path, type: 'url' });
+      renderPlaylist();
+      savePlaylistToServer();
+      input.value = '';
+    } else {
+      alert('Import failed: ' + (data.error || 'Unknown error'));
+    }
+  } catch (err) {
+    alert('Import error: ' + err.message);
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fab fa-google-drive"></i> Import from Drive';
+}
+
 function removeFromPlaylist(id) {
   const wasCurrent = currentTrackIndex >= 0 && currentTrackIndex < playlist.length && playlist[currentTrackIndex].id === id;
   if (wasCurrent) stopPlaylist();
