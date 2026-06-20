@@ -126,6 +126,7 @@ wss.on('connection', (ws, req) => {
           db.run('UPDATE users SET is_live = 1 WHERE id = ?', [userId]);
         });
       } else {
+        console.log(`No saved playlist for user ${userId}, broadcast ended`);
         // No playlist saved → mark offline
         getDb().then(db => {
           db.run('UPDATE users SET is_live = 0 WHERE id = ?', [userId]);

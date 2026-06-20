@@ -70,8 +70,10 @@ router.post('/save-playlist', verifyToken, async (req, res) => {
     // Also update in-memory cache for instant access on WS close
     if (playlist && playlist.length > 0) {
       savedPlaylists.set(String(req.user.id), playlist);
+      console.log(`Saved playlist for user ${req.user.id}: ${playlist.length} tracks`);
     } else {
       savedPlaylists.delete(String(req.user.id));
+      console.log(`Cleared playlist for user ${req.user.id}`);
     }
     res.json({ success: true, count: playlist ? playlist.length : 0 });
   } catch (error) {

@@ -39,6 +39,7 @@ let aiSentences = [];
 
 // Persistent broadcast
 let persistentBroadcastActive = false;
+let playlistSaveInterval = null;
 
 /* ========== INIT ========== */
 async function init() {
@@ -260,6 +261,7 @@ function movePlaylistItem(id, dir) {
   if (currentTrackIndex === idx) currentTrackIndex = newIdx;
   else if (currentTrackIndex === newIdx) currentTrackIndex = idx;
   renderPlaylist();
+  savePlaylistToServer();
 }
 
 function renderPlaylist() {
@@ -583,6 +585,7 @@ function cleanupAudioPipeline() {
   if (analyser) { try { analyser.disconnect(); } catch(e) {} analyser = null; }
   if (ws) { ws.close(); ws = null; }
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  if (playlistSaveInterval) { clearInterval(playlistSaveInterval); playlistSaveInterval = null; }
   if (audioContext) { audioContext.close(); audioContext = null; }
 }
 
@@ -660,6 +663,12 @@ async function startBroadcast() {
 
       startTime = Date.now();
       timerInterval = setInterval(updateTimer, 1000);
+      // Auto-save playlist every 5 seconds so server always has latest for persistence
+      if (playlistSaveInterval) clearInterval(playlistSaveInterval);
+      playlistSaveInterval = setInterval(() => {
+        if (!isBroadcasting) return;
+        savePlaylistToServer();
+      }, 5000);
       visualize();
     };
 
@@ -823,7 +832,7 @@ async function logout() {
   window.location.href = '/';
 }
 
-// Save playlist to server before tab closes (for persistent broadcast)
+// Fallback: save playlist one last time when tab closes (periodic auto-save handles most cases)
 window.addEventListener('beforeunload', () => {
   if (playlist.length > 0 && isBroadcasting) {
     try {
@@ -832,12 +841,8 @@ window.addEventListener('beforeunload', () => {
           .filter(s => s.src && !s.src.startsWith('blob:'))
           .map(s => ({ name: s.name, src: s.src, type: s.type || 'file' }))
       });
-      // Use synchronous XHR for reliability during page unload
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/broadcast/save-playlist', false);
-      xhr.setRequestHeader('Content-Type', 'application/json');
-      xhr.send(data);
-    } catch (e) { /* ignore */ }
+      navigator.sendBeacon('/api/broadcast/save-playlist', new Blob([data], { type: 'application/json' }));
+    } catch (e) {}
   }
 });
 
