@@ -166,6 +166,27 @@ app.get('/api/live', async (req, res) => {
   }
 });
 
+// TTS proxy endpoint (free, no API key needed)
+app.get('/api/tts', async (req, res) => {
+  try {
+    const text = req.query.text;
+    const lang = req.query.lang || 'ta';
+    if (!text) return res.status(400).json({ error: 'Text required' });
+
+    const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${encodeURIComponent(lang)}&client=tw-ob`;
+    const response = await fetch(url);
+    if (!response.ok) return res.status(502).json({ error: 'TTS failed' });
+
+    const audioBuffer = await response.arrayBuffer();
+    res.set('Content-Type', 'audio/mpeg');
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.send(Buffer.from(audioBuffer));
+  } catch (error) {
+    console.error('TTS error:', error.message);
+    res.status(500).json({ error: 'TTS failed' });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 
 async function start() {

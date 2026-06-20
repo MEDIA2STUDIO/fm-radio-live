@@ -22,6 +22,7 @@
   </nav>
 
   <main class="broadcast-container">
+    <!-- LEFT: Main Studio Panel -->
     <div class="broadcast-panel">
       <div class="broadcast-header">
         <h2><i class="fas fa-microphone"></i> Studio</h2>
@@ -31,106 +32,170 @@
         </div>
       </div>
 
-      <!-- Mic Section -->
-      <div class="mic-container">
-        <button id="micButton" class="mic-button" onclick="toggleBroadcast()">
-          <i class="fas fa-microphone"></i>
-          <div class="mic-ripple" id="micRipple"></div>
-        </button>
-        <p class="mic-hint" id="micHint">Press to start broadcasting</p>
+      <!-- Top section: Mic + Broadcast Stats -->
+      <div class="broadcast-top-bar">
+        <div class="mic-container">
+          <button id="micButton" class="mic-button" onclick="toggleBroadcast()">
+            <i class="fas fa-microphone"></i>
+            <div class="mic-ripple" id="micRipple"></div>
+          </button>
+          <p class="mic-hint" id="micHint">Press to start broadcasting</p>
+        </div>
+        <div class="broadcast-stats">
+          <div class="stat">
+            <i class="fas fa-headphones"></i>
+            <span id="listenerCount">0</span>
+            <label>Listeners</label>
+          </div>
+          <div class="stat">
+            <i class="fas fa-clock"></i>
+            <span id="broadcastTime">00:00:00</span>
+            <label>Duration</label>
+          </div>
+        </div>
+        <div class="audio-visualizer" id="audioVisualizer">
+          <canvas id="visualizerCanvas"></canvas>
+        </div>
       </div>
 
-      <!-- MP3 Section -->
-      <div class="mp3-player-section">
-        <div class="mp3-upload-area" id="mp3UploadArea">
-          <i class="fas fa-cloud-upload-alt"></i>
-          <p>Choose an MP3 file to play over your broadcast</p>
-          <input type="file" id="mp3FileInput" accept="audio/mp3,audio/mpeg,audio/mp4,audio/*" style="display:none">
-          <button onclick="document.getElementById('mp3FileInput').click()" class="btn btn-primary">Choose MP3</button>
+      <!-- Tab selector -->
+      <div class="studio-tabs">
+        <button class="studio-tab active" onclick="switchStudioTab('playlist')"><i class="fas fa-list"></i> Playlist</button>
+        <button class="studio-tab" onclick="switchStudioTab('ai')"><i class="fas fa-robot"></i> AI Announcer</button>
+        <button class="studio-tab" onclick="switchStudioTab('eq')"><i class="fas fa-sliders-h"></i> Equalizer</button>
+      </div>
+
+      <!-- Playlist Tab -->
+      <div id="studioPlaylist" class="studio-tab-content active">
+        <div class="playlist-section">
+          <div class="playlist-actions">
+            <div class="playlist-upload-group">
+              <button onclick="document.getElementById('playlistFiles').click()" class="btn btn-primary btn-sm"><i class="fas fa-upload"></i> Upload MP3</button>
+              <input type="file" id="playlistFiles" accept="audio/mp3,audio/mpeg,audio/*" multiple style="display:none">
+            </div>
+            <div class="playlist-url-group">
+              <input type="text" id="playlistUrlInput" placeholder="Paste audio URL..." class="form-input">
+              <button onclick="addUrlToPlaylist()" class="btn btn-primary btn-sm"><i class="fas fa-link"></i> Add</button>
+            </div>
+          </div>
+
+          <div class="playlist-current" id="playlistCurrent" style="display:none">
+            <div class="now-playing-label"><i class="fas fa-play"></i> Now Playing</div>
+            <div class="current-track">
+              <i class="fas fa-music"></i>
+              <span id="currentTrackName">-</span>
+            </div>
+            <div class="current-track-controls">
+              <button onclick="playPrevTrack()" class="mp3-btn btn-xs" title="Previous"><i class="fas fa-step-backward"></i></button>
+              <button id="playlistPlayBtn" onclick="togglePlaylistPlay()" class="mp3-btn btn-xs" title="Play/Pause"><i class="fas fa-play"></i></button>
+              <button onclick="playNextTrack()" class="mp3-btn btn-xs" title="Next"><i class="fas fa-step-forward"></i></button>
+              <button onclick="stopPlaylist()" class="mp3-btn btn-xs btn-danger-xs" title="Stop"><i class="fas fa-stop"></i></button>
+            </div>
+            <div class="current-track-progress">
+              <span id="playlistCurrentTime">00:00</span>
+              <input type="range" id="playlistSeek" min="0" max="100" value="0" oninput="seekPlaylist()">
+              <span id="playlistDuration">00:00</span>
+            </div>
+          </div>
+
+          <div class="playlist-queue-header">
+            <span><i class="fas fa-queue"></i> Queue (<span id="playlistCount">0</span>)</span>
+            <label class="playlist-loop-label">
+              <input type="checkbox" id="playlistLoop" onchange="setPlaylistLoop()">
+              <i class="fas fa-sync-alt"></i> Loop
+            </label>
+          </div>
+          <div class="playlist-queue" id="playlistQueue">
+            <p class="playlist-empty">No songs in playlist. Upload MP3 files or add a URL.</p>
+          </div>
         </div>
+      </div>
 
-        <div class="mp3-player" id="mp3Player" style="display:none;">
-          <div class="mp3-track-info">
-            <i class="fas fa-music"></i>
-            <span id="mp3FileName">No file selected</span>
-          </div>
-
-          <audio id="mp3AudioElement" preload="auto" style="display:none"></audio>
-
-          <div class="mp3-controls">
-            <button id="mp3PlayBtn" class="mp3-btn" onclick="toggleMp3Play()">
-              <i class="fas fa-play"></i>
-            </button>
-            <div class="mp3-progress">
-              <span id="mp3CurrentTime">00:00</span>
-              <input type="range" id="mp3Seek" min="0" max="100" value="0" oninput="seekMp3()">
-              <span id="mp3Duration">00:00</span>
-            </div>
-          </div>
-
-          <div class="mp3-extras">
-            <div class="mp3-extras-item">
-              <i class="fas fa-volume-up"></i>
-              <input type="range" id="mp3Volume" min="0" max="1" step="0.05" value="0.7" oninput="setMp3Volume()">
-            </div>
-            <label class="mp3-extras-item mp3-loop-label">
-              <i class="fas fa-sync-alt"></i>
-              <input type="checkbox" id="mp3Loop" onchange="setMp3Loop()">
-              <span>Loop</span>
+      <!-- AI Announcer Tab -->
+      <div id="studioAi" class="studio-tab-content">
+        <div class="ai-section">
+          <div class="ai-header">
+            <span><i class="fas fa-robot"></i> AI Announcer</span>
+            <label class="ai-toggle">
+              <input type="checkbox" id="aiToggle" onchange="toggleAi()">
+              <span class="toggle-slider"></span>
             </label>
           </div>
 
-          <!-- 3-Band Equalizer -->
-          <div class="mp3-equalizer">
-            <div class="eq-title"><i class="fas fa-sliders-h"></i> Equalizer</div>
-            <div class="eq-bands">
-              <div class="eq-band">
-                <label>Low</label>
-                <input type="range" id="eqLow" class="eq-slider" min="-12" max="12" value="0" step="1" oninput="setEqBand('Low')">
-                <span class="eq-value" id="eqLowVal">0dB</span>
+          <div class="ai-controls">
+            <div class="ai-form-group">
+              <label>AI Script (what AI should say)</label>
+              <textarea id="aiScript" rows="4" placeholder="Enter the script for AI to announce...&#10;Eg: Welcome to FM Radio Live! You are listening to the best music...">வணக்கம்! FM Radio Live-க்கு உங்களை வரவேற்கிறோம். இன்று சிறந்த இசையை ரசிக்கலாம். தொடர்ந்து கேட்டுக் கொண்டிருங்கள்!</textarea>
+            </div>
+            <div class="ai-options">
+              <div class="ai-option">
+                <label>Language</label>
+                <select id="aiLang" class="form-input">
+                  <option value="ta">தமிழ்</option>
+                  <option value="en">English</option>
+                  <option value="hi">हिन्दी</option>
+                  <option value="ml">മലയാളം</option>
+                  <option value="te">తెలుగు</option>
+                  <option value="kn">ಕನ್ನಡ</option>
+                </select>
               </div>
-              <div class="eq-band">
-                <label>Mid</label>
-                <input type="range" id="eqMid" class="eq-slider" min="-12" max="12" value="0" step="1" oninput="setEqBand('Mid')">
-                <span class="eq-value" id="eqMidVal">0dB</span>
+              <div class="ai-option">
+                <label>Speed</label>
+                <select id="aiSpeed" class="form-input">
+                  <option value="0.8">Slow</option>
+                  <option value="1" selected>Normal</option>
+                  <option value="1.2">Fast</option>
+                  <option value="1.5">Very Fast</option>
+                </select>
               </div>
-              <div class="eq-band">
-                <label>High</label>
-                <input type="range" id="eqHigh" class="eq-slider" min="-12" max="12" value="0" step="1" oninput="setEqBand('High')">
-                <span class="eq-value" id="eqHighVal">0dB</span>
+              <div class="ai-option">
+                <label>Interval (sec)</label>
+                <select id="aiInterval" class="form-input">
+                  <option value="5">5</option>
+                  <option value="10" selected>10</option>
+                  <option value="15">15</option>
+                  <option value="30">30</option>
+                  <option value="60">60</option>
+                </select>
               </div>
+              <div class="ai-option ai-volume-opt">
+                <label><i class="fas fa-volume-up"></i></label>
+                <input type="range" id="aiVolume" min="0" max="1" step="0.05" value="0.8">
+              </div>
+            </div>
+            <div class="ai-status" id="aiStatus">
+              <span class="ai-status-dot" id="aiStatusDot"></span>
+              <span id="aiStatusText">AI is idle</span>
             </div>
           </div>
         </div>
-
-        <!-- Broadcast button for MP3 mode (same function as mic button) -->
-        <div class="mic-container mp3-broadcast-section" id="mp3BroadcastSection">
-          <button id="mp3BroadcastBtn" class="mic-button" onclick="toggleBroadcast()" disabled>
-            <i class="fas fa-broadcast-tower"></i>
-            <div class="mic-ripple"></div>
-          </button>
-          <p class="mic-hint" id="mp3BroadcastHint">Load an MP3 file to start broadcasting</p>
-        </div>
       </div>
 
-      <div class="broadcast-stats">
-        <div class="stat">
-          <i class="fas fa-headphones"></i>
-          <span id="listenerCount">0</span>
-          <label>Listeners</label>
+      <!-- Equalizer Tab -->
+      <div id="studioEq" class="studio-tab-content">
+        <div class="mp3-equalizer" style="border-top:none;padding-top:0">
+          <div class="eq-bands">
+            <div class="eq-band">
+              <label>Low</label>
+              <input type="range" id="eqLow" class="eq-slider" min="-12" max="12" value="0" step="1" oninput="setEqBand('Low')">
+              <span class="eq-value" id="eqLowVal">0dB</span>
+            </div>
+            <div class="eq-band">
+              <label>Mid</label>
+              <input type="range" id="eqMid" class="eq-slider" min="-12" max="12" value="0" step="1" oninput="setEqBand('Mid')">
+              <span class="eq-value" id="eqMidVal">0dB</span>
+            </div>
+            <div class="eq-band">
+              <label>High</label>
+              <input type="range" id="eqHigh" class="eq-slider" min="-12" max="12" value="0" step="1" oninput="setEqBand('High')">
+              <span class="eq-value" id="eqHighVal">0dB</span>
+            </div>
+          </div>
         </div>
-        <div class="stat">
-          <i class="fas fa-clock"></i>
-          <span id="broadcastTime">00:00:00</span>
-          <label>Duration</label>
-        </div>
-      </div>
-
-      <div class="audio-visualizer" id="audioVisualizer">
-        <canvas id="visualizerCanvas"></canvas>
       </div>
     </div>
 
+    <!-- RIGHT: Listeners Panel -->
     <div class="listeners-panel">
       <h3><i class="fas fa-users"></i> Current Listeners</h3>
       <div id="listenersList" class="listeners-list">
@@ -138,6 +203,9 @@
       </div>
     </div>
   </main>
+
+  <!-- Hidden audio elements -->
+  <audio id="playlistAudioElement" preload="auto" style="display:none"></audio>
 
   <script src="/js/broadcast.js"></script>
 </body>
