@@ -140,7 +140,7 @@ async function initialize() {
 
     lastInsertRowid() {
       try {
-        const stmt = sqlDb.prepare("SELECT MAX(id) as id FROM users");
+        const stmt = sqlDb.prepare("SELECT last_insert_rowid() as id");
         if (stmt.step()) {
           const val = stmt.get()[0];
           stmt.free();
