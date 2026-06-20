@@ -565,7 +565,7 @@ function setEqBand(band) {
 
 /* ========== BROADCAST ========== */
 async function toggleBroadcast() {
-  if (isBroadcasting) stopBroadcast();
+  if (isBroadcasting) await stopBroadcast();
   else startBroadcast();
 }
 
@@ -728,18 +728,18 @@ function connectPlaylistToPipeline() {
   }
 }
 
-function stopBroadcast() {
+async function stopBroadcast() {
   stopAi();
-  cleanupAudioPipeline();
-  isBroadcasting = false;
-  updateUI(false);
-  fetch('/api/broadcast/stop', { method: 'POST' });
-  // Clear server playlist so WS close doesn't auto-persist
-  fetch('/api/broadcast/save-playlist', {
+  // Clear playlist on server FIRST (before WS closes) so server doesn't auto-persist
+  await fetch('/api/broadcast/save-playlist', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ playlist: [] })
   });
+  await fetch('/api/broadcast/stop', { method: 'POST' });
+  cleanupAudioPipeline();
+  isBroadcasting = false;
+  updateUI(false);
 }
 
 /* ========== UI ========== */
