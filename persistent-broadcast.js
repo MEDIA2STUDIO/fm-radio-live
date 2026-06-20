@@ -4,6 +4,8 @@ const path = require('path');
 const WebSocket = require('ws');
 
 const persistentBroadcasts = new Map();
+// In-memory cache of saved playlists (updated on every save-playlist API call)
+const savedPlaylists = new Map();
 
 class PersistentBroadcast {
   constructor(userId, playlist, wss) {
@@ -176,4 +178,4 @@ class PersistentBroadcast {
   }
 }
 
-module.exports = { PersistentBroadcast, persistentBroadcasts };
+module.exports = { PersistentBroadcast, persistentBroadcasts, savedPlaylists };

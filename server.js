@@ -8,7 +8,7 @@ const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const broadcastRoutes = require('./routes/broadcast');
 const { verifyToken, verifyAdmin } = require('./middleware/auth');
-const { PersistentBroadcast, persistentBroadcasts } = require('./persistent-broadcast');
+const { PersistentBroadcast, persistentBroadcasts, savedPlaylists } = require('./persistent-broadcast');
 const fs = require('fs');
 const multer = require('multer');
 
@@ -92,42 +92,42 @@ wss.on('connection', (ws, req) => {
         });
       }
     });
-
     ws.on('close', () => {
       broadcasters.delete(userId);
+      console.log(`Broadcaster ${userId} disconnected`);
 
-      getDb().then(db => {
-        db.run('UPDATE users SET is_live = 1 WHERE id = ?', [userId]);
-        db.run("UPDATE broadcasts SET status = 'live', ended_at = NULL WHERE user_id = ? AND status = 'ended' ORDER BY started_at DESC LIMIT 1", [userId]);
-      });
-
+      // Notify frontend
       broadcastToFrontend({
         type: 'broadcaster_offline',
         userId,
         timestamp: Date.now()
       });
 
-      // Wait a beat then check for playlist persistence (allow stopBroadcast to clear first)
-      setTimeout(() => {
-        getDb().then(async (db) => {
-          const songs = db.all('SELECT * FROM playlist_songs WHERE user_id = ? ORDER BY sort_order', [userId]);
-          if (songs.length > 0 && !persistentBroadcasts.has(userId)) {
-            const playlist = songs.map(s => ({ name: s.name, src: s.src, type: s.type }));
-            const pb = new PersistentBroadcast(String(userId), playlist, wss);
-            pb.start();
+      // Check in-memory cache for saved playlist → persist immediately
+      const cachedPlaylist = savedPlaylists.get(userId);
+      if (cachedPlaylist && cachedPlaylist.length > 0 && !persistentBroadcasts.has(userId)) {
+        console.log(`Starting persistent broadcast for user ${userId} (${cachedPlaylist.length} tracks)`);
+        const pb = new PersistentBroadcast(userId, cachedPlaylist, wss);
+        pb.start();
 
-            // Re-attach any listeners that were connected
-            wss.clients.forEach(client => {
-              if (client.readyState === WebSocket.OPEN && client.broadcasterId == userId) {
-                pb.addListener(client);
-              }
-            });
-
-            db.run('INSERT OR REPLACE INTO persistent_broadcasts (user_id, playlist_json, is_active) VALUES (?, ?, 1)',
-              [userId, JSON.stringify(playlist)]);
+        // Re-attach any listeners that were connected to this broadcaster
+        wss.clients.forEach(client => {
+          if (client.readyState === WebSocket.OPEN && client.broadcasterId == userId) {
+            pb.addListener(client);
           }
         });
-      }, 500);
+
+        // Update DB: keep user live
+        getDb().then(db => {
+          db.run('UPDATE users SET is_live = 1 WHERE id = ?', [userId]);
+        });
+      } else {
+        // No playlist saved → mark offline
+        getDb().then(db => {
+          db.run('UPDATE users SET is_live = 0 WHERE id = ?', [userId]);
+          db.run("UPDATE broadcasts SET status = 'ended', ended_at = CURRENT_TIMESTAMP WHERE user_id = ? AND status = 'live'", [userId]);
+        });
+      }
     });
   }
 
@@ -203,13 +203,13 @@ app.get('/api/live', async (req, res) => {
     const liveBroadcasters = db.all(`
       SELECT u.id, u.username, u.display_name, u.location, u.avatar
       FROM users u
-      WHERE u.is_live = 1 AND u.role = 'broadcaster'
+      WHERE (u.is_live = 1 OR u.id IN (SELECT user_id FROM playlist_songs WHERE user_id = u.id)) AND u.role = 'broadcaster'
     `);
 
     res.json({
       broadcasters: liveBroadcasters.map(b => ({
         ...b,
-        listeners: broadcasters.get(String(b.id))?.listeners.size || 0
+        listeners: broadcasters.get(String(b.id))?.listeners.size || persistentBroadcasts.get(String(b.id))?.listeners.size || 0
       }))
     });
   } catch (error) {
@@ -253,10 +253,9 @@ app.get('/api/broadcast/persist-status', verifyToken, async (req, res) => {
   if (pb && pb.active) {
     res.json({ active: true, ...pb.getStatus() });
   } else {
-    // Check DB
-    const db = await getDb();
-    const record = db.get('SELECT * FROM persistent_broadcasts WHERE user_id = ? AND is_active = 1', [req.user.id]);
-    res.json({ active: false, hasSavedPlaylist: !!record });
+    // Check in-memory cache
+    const cached = savedPlaylists.get(String(req.user.id));
+    res.json({ active: false, hasSavedPlaylist: !!cached && cached.length > 0 });
   }
 });
 
@@ -264,6 +263,7 @@ app.get('/api/broadcast/persist-status', verifyToken, async (req, res) => {
 app.post('/api/broadcast/persist-stop', verifyToken, async (req, res) => {
   const pb = persistentBroadcasts.get(String(req.user.id));
   if (pb) pb.stop();
+  savedPlaylists.delete(String(req.user.id));
   const db = await getDb();
   db.run('DELETE FROM persistent_broadcasts WHERE user_id = ?', [req.user.id]);
   db.run('DELETE FROM playlist_songs WHERE user_id = ?', [req.user.id]);
@@ -276,6 +276,7 @@ app.post('/api/broadcast/persist-stop', verifyToken, async (req, res) => {
 app.post('/api/broadcast/take-over', verifyToken, async (req, res) => {
   const pb = persistentBroadcasts.get(String(req.user.id));
   if (pb) pb.stop();
+  // Don't clear savedPlaylists - the client will reload it
   res.json({ success: true });
 });
 

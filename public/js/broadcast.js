@@ -74,7 +74,10 @@ function getInactiveAudio() { return audioEls[1 - activeAudioIdx]; }
 /* ========== PERSISTENT BROADCAST ========== */
 async function savePlaylistToServer() {
   try {
-    const serializable = playlist.map(s => ({ name: s.name, src: s.src, type: s.type || 'file' }));
+    // Only save songs with server-accessible paths (skip blob URLs)
+    const serializable = playlist
+      .filter(s => s.src && !s.src.startsWith('blob:'))
+      .map(s => ({ name: s.name, src: s.src, type: s.type || 'file' }));
     await fetch('/api/broadcast/save-playlist', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -200,6 +203,7 @@ function toggleMicMute() {
 /* ========== PLAYLIST ========== */
 async function handlePlaylistFiles(e) {
   const files = Array.from(e.target.files);
+  let added = 0;
   for (const file of files) {
     if (!file.type.includes('audio') && !file.name.endsWith('.mp3')) continue;
     try {
@@ -209,15 +213,16 @@ async function handlePlaylistFiles(e) {
       const data = await res.json();
       if (data.success) {
         playlist.push({ id: Date.now() + Math.random(), name: data.name, src: data.path, type: 'file' });
+        added++;
       }
     } catch (err) {
-      console.warn('Upload failed, using local blob:', err.message);
-      const url = URL.createObjectURL(file);
-      playlist.push({ id: Date.now() + Math.random(), name: file.name, src: url, type: 'file' });
+      console.warn('Upload failed:', err.message);
     }
   }
-  renderPlaylist();
-  savePlaylistToServer();
+  if (added > 0) {
+    renderPlaylist();
+    await savePlaylistToServer();
+  }
 }
 
 function addUrlToPlaylist() {
@@ -822,11 +827,18 @@ async function logout() {
 // Save playlist to server before tab closes (for persistent broadcast)
 window.addEventListener('beforeunload', () => {
   if (playlist.length > 0 && isBroadcasting) {
-    // Use sendBeacon for reliable delivery during page unload
     try {
-      const data = JSON.stringify({ playlist: playlist.map(s => ({ name: s.name, src: s.src, type: s.type || 'file' })) });
-      navigator.sendBeacon('/api/broadcast/save-playlist', new Blob([data], { type: 'application/json' }));
-    } catch (e) {}
+      const data = JSON.stringify({
+        playlist: playlist
+          .filter(s => s.src && !s.src.startsWith('blob:'))
+          .map(s => ({ name: s.name, src: s.src, type: s.type || 'file' }))
+      });
+      // Use synchronous XHR for reliability during page unload
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/broadcast/save-playlist', false);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.send(data);
+    } catch (e) { /* ignore */ }
   }
 });
 

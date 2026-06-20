@@ -1,6 +1,7 @@
 const express = require('express');
 const { getDb } = require('../database');
 const { verifyToken } = require('../middleware/auth');
+const { savedPlaylists } = require('../persistent-broadcast');
 
 const router = express.Router();
 
@@ -28,7 +29,8 @@ router.post('/stop', verifyToken, async (req, res) => {
     const db = await getDb();
     db.run('UPDATE users SET is_live = 0 WHERE id = ?', [req.user.id]);
     db.run("UPDATE broadcasts SET status = 'ended', ended_at = CURRENT_TIMESTAMP WHERE user_id = ? AND status = 'live'", [req.user.id]);
-
+    // Clear in-memory playlist cache so WS close doesn't persist
+    savedPlaylists.delete(String(req.user.id));
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -64,6 +66,12 @@ router.post('/save-playlist', verifyToken, async (req, res) => {
           [req.user.id, song.name, song.src, song.type || 'file', i]
         );
       });
+    }
+    // Also update in-memory cache for instant access on WS close
+    if (playlist && playlist.length > 0) {
+      savedPlaylists.set(String(req.user.id), playlist);
+    } else {
+      savedPlaylists.delete(String(req.user.id));
     }
     res.json({ success: true, count: playlist ? playlist.length : 0 });
   } catch (error) {
