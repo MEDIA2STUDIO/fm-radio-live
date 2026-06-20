@@ -206,6 +206,11 @@ function setPlaylistLoop() {
   playlistLoop = document.getElementById('playlistLoop').checked;
 }
 
+function setPlaylistVolume() {
+  const vol = parseFloat(document.getElementById('playlistVolume').value);
+  if (playlistAudio) playlistAudio.volume = vol;
+}
+
 /* ========== AI ANNOUNCER ========== */
 function toggleAi() {
   aiEnabled = document.getElementById('aiToggle').checked;

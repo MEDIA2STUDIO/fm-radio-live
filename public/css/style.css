@@ -1398,6 +1398,40 @@ footer {
   cursor: pointer;
 }
 
+.current-track-volume {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.current-track-volume i {
+  color: var(--gray);
+  font-size: 0.85rem;
+  width: 16px;
+}
+
+.current-track-volume input[type="range"] {
+  flex: 1;
+  max-width: 120px;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255,255,255,0.2);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.current-track-volume input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--primary);
+  cursor: pointer;
+}
+
 .playlist-queue-header {
   display: flex;
   justify-content: space-between;

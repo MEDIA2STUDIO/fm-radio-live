@@ -96,6 +96,10 @@
               <input type="range" id="playlistSeek" min="0" max="100" value="0" oninput="seekPlaylist()">
               <span id="playlistDuration">00:00</span>
             </div>
+            <div class="current-track-volume">
+              <i class="fas fa-volume-up"></i>
+              <input type="range" id="playlistVolume" min="0" max="1" step="0.05" value="0.8" oninput="setPlaylistVolume()">
+            </div>
           </div>
 
           <div class="playlist-queue-header">
