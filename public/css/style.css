@@ -607,6 +607,243 @@ body {
   padding: 2rem;
 }
 
+/* Source Selector */
+.source-selector {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.source-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.source-option:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.source-option input[type="radio"] {
+  accent-color: var(--primary);
+}
+
+.source-option:has(input:checked) {
+  border-color: var(--primary);
+  background: rgba(255, 107, 53, 0.15);
+}
+
+.source-option i {
+  font-size: 1.2rem;
+  color: var(--primary);
+}
+
+/* MP3 Player Section */
+.mp3-player-section {
+  margin: 1rem 0;
+}
+
+.mp3-upload-area {
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 2px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.mp3-upload-area:hover {
+  border-color: var(--primary);
+  background: rgba(255, 107, 53, 0.05);
+}
+
+.mp3-upload-area i {
+  font-size: 3rem;
+  color: var(--primary);
+  margin-bottom: 1rem;
+}
+
+.mp3-upload-area p {
+  color: var(--gray);
+  margin-bottom: 1rem;
+}
+
+.mp3-player {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 1.5rem;
+}
+
+.mp3-track-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mp3-track-info i {
+  font-size: 1.5rem;
+  color: var(--primary);
+}
+
+.mp3-track-info span {
+  font-weight: 500;
+  font-size: 1rem;
+  word-break: break-all;
+}
+
+.mp3-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.mp3-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: var(--gradient);
+  color: #fff;
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.3s;
+}
+
+.mp3-btn:hover {
+  transform: scale(1.1);
+}
+
+.mp3-progress {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.mp3-progress span {
+  font-size: 0.8rem;
+  color: var(--gray);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 40px;
+}
+
+.mp3-progress input[type="range"] {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.mp3-progress input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--primary);
+  cursor: pointer;
+}
+
+.mp3-extras {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.mp3-extras-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.mp3-extras-item i {
+  color: var(--gray);
+  font-size: 0.9rem;
+  width: 18px;
+  text-align: center;
+}
+
+.mp3-extras-item input[type="range"] {
+  width: 100px;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.mp3-extras-item input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--primary);
+  cursor: pointer;
+}
+
+.mp3-loop-label {
+  cursor: pointer;
+  user-select: none;
+}
+
+.mp3-loop-label input[type="checkbox"] {
+  accent-color: var(--primary);
+  width: 16px;
+  height: 16px;
+}
+
+.mp3-loop-label span {
+  color: var(--gray);
+  font-size: 0.9rem;
+}
+
+.mp3-broadcast-section {
+  margin-top: 1.5rem;
+}
+
+.mp3-broadcast-section .mic-button {
+  width: 120px;
+  height: 120px;
+  font-size: 2.5rem;
+}
+
+.mp3-broadcast-section .mic-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none !important;
+  animation: none !important;
+}
+
+#mp3Stats {
+  display: flex;
+  justify-content: center;
+  gap: 3rem;
+  margin-top: 1.5rem;
+}
+
 /* Listen Page */
 .listen-container {
   max-width: 1200px;
@@ -1100,6 +1337,50 @@ footer {
   .admin-table th,
   .admin-table td {
     padding: 0.6rem;
+  }
+
+  .source-selector {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0 0.5rem;
+  }
+
+  .source-option {
+    justify-content: center;
+  }
+
+  .mp3-controls {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .mp3-progress span {
+    font-size: 0.7rem;
+    min-width: 35px;
+  }
+
+  .mp3-extras {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .mp3-extras-item input[type="range"] {
+    width: 100%;
+  }
+
+  .mp3-upload-area {
+    padding: 1.5rem;
+  }
+
+  .mp3-upload-area i {
+    font-size: 2rem;
+  }
+
+  .mp3-broadcast-section .mic-button {
+    width: 100px;
+    height: 100px;
+    font-size: 2rem;
   }
 
   .form-row {

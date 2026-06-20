@@ -31,24 +31,93 @@
         </div>
       </div>
 
-      <div class="mic-container">
-        <button id="micButton" class="mic-button" onclick="toggleBroadcast()">
+      <!-- Source Selector -->
+      <div class="source-selector">
+        <label class="source-option">
+          <input type="radio" name="audioSource" value="mic" checked onchange="toggleSource()">
           <i class="fas fa-microphone"></i>
-          <div class="mic-ripple" id="micRipple"></div>
-        </button>
-        <p class="mic-hint" id="micHint">Press to start broadcasting</p>
+          <span>Microphone</span>
+        </label>
+        <label class="source-option">
+          <input type="radio" name="audioSource" value="mp3" onchange="toggleSource()">
+          <i class="fas fa-music"></i>
+          <span>MP3 Player</span>
+        </label>
       </div>
 
-      <div class="broadcast-stats">
-        <div class="stat">
-          <i class="fas fa-headphones"></i>
-          <span id="listenerCount">0</span>
-          <label>Listeners</label>
+      <!-- Mic Mode -->
+      <div id="micSection">
+        <div class="mic-container">
+          <button id="micButton" class="mic-button" onclick="toggleBroadcast()">
+            <i class="fas fa-microphone"></i>
+            <div class="mic-ripple" id="micRipple"></div>
+          </button>
+          <p class="mic-hint" id="micHint">Press to start broadcasting</p>
         </div>
-        <div class="stat">
-          <i class="fas fa-clock"></i>
-          <span id="broadcastTime">00:00:00</span>
-          <label>Duration</label>
+      </div>
+
+      <!-- MP3 Mode -->
+      <div id="mp3Section" style="display:none;">
+        <div class="mp3-player-section">
+          <div class="mp3-upload-area" id="mp3UploadArea">
+            <i class="fas fa-cloud-upload-alt"></i>
+            <p>Choose an MP3 file to broadcast</p>
+            <input type="file" id="mp3FileInput" accept="audio/mp3,audio/mpeg,audio/mp4,audio/*" style="display:none">
+            <button onclick="document.getElementById('mp3FileInput').click()" class="btn btn-primary">Choose MP3</button>
+          </div>
+
+          <div class="mp3-player" id="mp3Player" style="display:none;">
+            <div class="mp3-track-info">
+              <i class="fas fa-music"></i>
+              <span id="mp3FileName">No file selected</span>
+            </div>
+
+            <audio id="mp3AudioElement" preload="auto" style="display:none"></audio>
+
+            <div class="mp3-controls">
+              <button id="mp3PlayBtn" class="mp3-btn" onclick="toggleMp3Play()">
+                <i class="fas fa-play"></i>
+              </button>
+              <div class="mp3-progress">
+                <span id="mp3CurrentTime">00:00</span>
+                <input type="range" id="mp3Seek" min="0" max="100" value="0" oninput="seekMp3()">
+                <span id="mp3Duration">00:00</span>
+              </div>
+            </div>
+
+            <div class="mp3-extras">
+              <div class="mp3-extras-item">
+                <i class="fas fa-volume-up"></i>
+                <input type="range" id="mp3Volume" min="0" max="1" step="0.05" value="1" oninput="setMp3Volume()">
+              </div>
+              <label class="mp3-extras-item mp3-loop-label">
+                <i class="fas fa-sync-alt"></i>
+                <input type="checkbox" id="mp3Loop" onchange="setMp3Loop()">
+                <span>Loop</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="mic-container mp3-broadcast-section" id="mp3BroadcastSection">
+            <button id="mp3BroadcastBtn" class="mic-button" onclick="toggleBroadcast()" disabled>
+              <i class="fas fa-broadcast-tower"></i>
+              <div class="mic-ripple"></div>
+            </button>
+            <p class="mic-hint" id="mp3BroadcastHint">Load an MP3 file to start broadcasting</p>
+          </div>
+
+          <div class="broadcast-stats" id="mp3Stats">
+            <div class="stat">
+              <i class="fas fa-headphones"></i>
+              <span id="mp3ListenerCount">0</span>
+              <label>Listeners</label>
+            </div>
+            <div class="stat">
+              <i class="fas fa-clock"></i>
+              <span id="mp3BroadcastTime">00:00:00</span>
+              <label>Duration</label>
+            </div>
+          </div>
         </div>
       </div>
 
