@@ -37,6 +37,9 @@ let aiTimer = null;
 let aiSentenceIndex = 0;
 let aiSentences = [];
 
+// Persistent broadcast
+let persistentBroadcastActive = false;
+
 /* ========== INIT ========== */
 async function init() {
   try {
@@ -60,10 +63,94 @@ async function init() {
   audioEls[1].addEventListener('play', onAudioPlay);
 
   document.getElementById('playlistFiles').addEventListener('change', handlePlaylistFiles);
+
+  // Check if there's a persistent broadcast running
+  checkPersistentBroadcast();
 }
 
 function getActiveAudio() { return audioEls[activeAudioIdx]; }
 function getInactiveAudio() { return audioEls[1 - activeAudioIdx]; }
+
+/* ========== PERSISTENT BROADCAST ========== */
+async function savePlaylistToServer() {
+  try {
+    const serializable = playlist.map(s => ({ name: s.name, src: s.src, type: s.type || 'file' }));
+    await fetch('/api/broadcast/save-playlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playlist: serializable })
+    });
+  } catch (e) { /* ignore */ }
+}
+
+async function checkPersistentBroadcast() {
+  try {
+    const res = await fetch('/api/broadcast/persist-status');
+    const data = await res.json();
+    if (data.active) {
+      persistentBroadcastActive = true;
+      showPersistentBanner(data);
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function showPersistentBanner(status) {
+  let banner = document.getElementById('persistentBanner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'persistentBanner';
+    banner.className = 'persistent-banner';
+    document.querySelector('.broadcast-container').insertBefore(banner, document.querySelector('.broadcast-panel'));
+  }
+  banner.innerHTML = `
+    <div class="persistent-banner-content">
+      <div class="persistent-banner-info">
+        <span class="status-dot live"></span>
+        <span><strong>Your broadcast is still alive!</strong> Server is playing <em>${status.currentTrack ? escapeHtml(status.currentTrack.name) : 'your playlist'}</em> (Track ${status.currentTrackIndex + 1}/${status.totalTracks})</span>
+      </div>
+      <div class="persistent-banner-actions">
+        <button onclick="takeOverBroadcast()" class="btn btn-primary btn-sm"><i class="fas fa-microphone"></i> Take Over</button>
+        <button onclick="stopPersistentBroadcast()" class="btn btn-secondary btn-sm"><i class="fas fa-stop"></i> Stop</button>
+      </div>
+    </div>
+  `;
+  // Update UI to show "live" status
+  document.getElementById('broadcastStatus').innerHTML = '<span class="status-dot live"></span><span>Live (Server)</span>';
+  document.getElementById('micHint').textContent = 'Server is broadcasting your playlist. Take over to resume mic.';
+}
+
+async function takeOverBroadcast() {
+  persistentBroadcastActive = false;
+  await fetch('/api/broadcast/take-over', { method: 'POST' });
+  const banner = document.getElementById('persistentBanner');
+  if (banner) banner.remove();
+  // Load saved playlist
+  try {
+    const res = await fetch('/api/broadcast/get-playlist');
+    const data = await res.json();
+    if (data.playlist && data.playlist.length > 0) {
+      playlist = data.playlist.map(s => ({ id: Date.now() + Math.random(), name: s.name, src: s.src, type: s.type }));
+      renderPlaylist();
+      playTrack(0);
+    }
+  } catch (e) {}
+  document.getElementById('broadcastStatus').innerHTML = '<span class="status-dot offline"></span><span>Offline</span>';
+  document.getElementById('micHint').textContent = 'Press to start broadcasting';
+  startBroadcast();
+}
+
+async function stopPersistentBroadcast() {
+  persistentBroadcastActive = false;
+  await fetch('/api/broadcast/persist-stop', { method: 'POST' });
+  const banner = document.getElementById('persistentBanner');
+  if (banner) banner.remove();
+  playlist = [];
+  renderPlaylist();
+  document.getElementById('broadcastStatus').innerHTML = '<span class="status-dot offline"></span><span>Offline</span>';
+  document.getElementById('micHint').textContent = 'Press to start broadcasting';
+  document.getElementById('listenerCount').textContent = '0';
+  document.getElementById('broadcastTime').textContent = '00:00:00';
+}
 
 function onAudioPlay() {
   // When audio starts playing during broadcast, reconnect pipeline
@@ -111,14 +198,26 @@ function toggleMicMute() {
 }
 
 /* ========== PLAYLIST ========== */
-function handlePlaylistFiles(e) {
+async function handlePlaylistFiles(e) {
   const files = Array.from(e.target.files);
-  files.forEach(file => {
-    if (!file.type.includes('audio')) return;
-    const url = URL.createObjectURL(file);
-    playlist.push({ id: Date.now() + Math.random(), name: file.name, src: url, type: 'upload' });
-  });
+  for (const file of files) {
+    if (!file.type.includes('audio') && !file.name.endsWith('.mp3')) continue;
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const data = await res.json();
+      if (data.success) {
+        playlist.push({ id: Date.now() + Math.random(), name: data.name, src: data.path, type: 'file' });
+      }
+    } catch (err) {
+      console.warn('Upload failed, using local blob:', err.message);
+      const url = URL.createObjectURL(file);
+      playlist.push({ id: Date.now() + Math.random(), name: file.name, src: url, type: 'file' });
+    }
+  }
   renderPlaylist();
+  savePlaylistToServer();
 }
 
 function addUrlToPlaylist() {
@@ -129,6 +228,7 @@ function addUrlToPlaylist() {
   playlist.push({ id: Date.now() + Math.random(), name, src: url, type: 'url' });
   input.value = '';
   renderPlaylist();
+  savePlaylistToServer();
 }
 
 function removeFromPlaylist(id) {
@@ -137,6 +237,7 @@ function removeFromPlaylist(id) {
   playlist = playlist.filter(s => s.id !== id);
   if (currentTrackIndex >= playlist.length) currentTrackIndex = playlist.length - 1;
   renderPlaylist();
+  savePlaylistToServer();
 }
 
 function movePlaylistItem(id, dir) {
@@ -629,6 +730,12 @@ function stopBroadcast() {
   isBroadcasting = false;
   updateUI(false);
   fetch('/api/broadcast/stop', { method: 'POST' });
+  // Clear server playlist so WS close doesn't auto-persist
+  fetch('/api/broadcast/save-playlist', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ playlist: [] })
+  });
 }
 
 /* ========== UI ========== */
@@ -695,9 +802,32 @@ function formatTime(seconds) {
 }
 
 async function logout() {
-  if (isBroadcasting) stopBroadcast();
+  // Save playlist for persistent broadcast before leaving
+  if (playlist.length > 0) {
+    await savePlaylistToServer();
+  }
+  // If broadcasting and has playlist, let server take over; stop WS without ending broadcast
+  if (isBroadcasting) {
+    cleanupAudioPipeline();
+    isBroadcasting = false;
+    updateUI(false);
+    // Don't call stopBroadcast() - let the server persist
+  } else if (!persistentBroadcastActive) {
+    // No active broadcast, just exit
+  }
   await fetch('/api/auth/logout', { method: 'POST' });
   window.location.href = '/';
 }
+
+// Save playlist to server before tab closes (for persistent broadcast)
+window.addEventListener('beforeunload', () => {
+  if (playlist.length > 0 && isBroadcasting) {
+    // Use sendBeacon for reliable delivery during page unload
+    try {
+      const data = JSON.stringify({ playlist: playlist.map(s => ({ name: s.name, src: s.src, type: s.type || 'file' })) });
+      navigator.sendBeacon('/api/broadcast/save-playlist', new Blob([data], { type: 'application/json' }));
+    } catch (e) {}
+  }
+});
 
 init();

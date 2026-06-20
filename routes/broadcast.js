@@ -49,4 +49,37 @@ router.get('/history', verifyToken, async (req, res) => {
   }
 });
 
+// Save playlist to server (for persistent broadcast)
+router.post('/save-playlist', verifyToken, async (req, res) => {
+  try {
+    const { playlist } = req.body;
+    const db = await getDb();
+    // Clear old playlist
+    db.run('DELETE FROM playlist_songs WHERE user_id = ?', [req.user.id]);
+    // Insert new
+    if (playlist && playlist.length > 0) {
+      playlist.forEach((song, i) => {
+        db.run(
+          'INSERT INTO playlist_songs (user_id, name, src, type, sort_order) VALUES (?, ?, ?, ?, ?)',
+          [req.user.id, song.name, song.src, song.type || 'file', i]
+        );
+      });
+    }
+    res.json({ success: true, count: playlist ? playlist.length : 0 });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get saved playlist
+router.get('/get-playlist', verifyToken, async (req, res) => {
+  try {
+    const db = await getDb();
+    const songs = db.all('SELECT * FROM playlist_songs WHERE user_id = ? ORDER BY sort_order', [req.user.id]);
+    res.json({ playlist: songs });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;

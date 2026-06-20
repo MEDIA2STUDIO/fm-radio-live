@@ -69,6 +69,30 @@ async function initialize() {
     )
   `);
 
+  sqlDb.run(`
+    CREATE TABLE IF NOT EXISTS playlist_songs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      src TEXT NOT NULL,
+      type TEXT DEFAULT 'file',
+      sort_order INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+  `);
+
+  sqlDb.run(`
+    CREATE TABLE IF NOT EXISTS persistent_broadcasts (
+      user_id INTEGER PRIMARY KEY,
+      playlist_json TEXT,
+      current_track INTEGER DEFAULT 0,
+      is_active INTEGER DEFAULT 0,
+      started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+  `);
+
   // Create admin user if not exists
   const adminCheck = sqlDb.exec("SELECT id FROM users WHERE role = 'admin'");
   if (!adminCheck.length || adminCheck[0].values.length === 0) {

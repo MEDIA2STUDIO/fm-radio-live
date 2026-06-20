@@ -410,6 +410,36 @@ body {
   margin: 0 auto;
 }
 
+/* Persistent broadcast banner */
+.persistent-banner {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, #1a8a2e, #28a745);
+  border-radius: 12px;
+  padding: 1rem 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.persistent-banner-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.persistent-banner-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #fff;
+  font-size: 0.95rem;
+}
+
+.persistent-banner-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .broadcast-panel {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 20px;
@@ -2016,6 +2046,20 @@ footer {
     grid-template-columns: 1fr;
     padding: 2rem 1rem;
     gap: 1rem;
+  }
+
+  .persistent-banner-content {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .persistent-banner-info {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .persistent-banner-actions {
+    justify-content: center;
   }
 
   .feature {
