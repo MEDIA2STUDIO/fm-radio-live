@@ -3,7 +3,7 @@ const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
 const cookieParser = require('cookie-parser');
-const { getDb } = require('./database');
+const { getDb, setupShutdownHandlers } = require('./database');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const broadcastRoutes = require('./routes/broadcast');
@@ -193,6 +193,7 @@ const PORT = process.env.PORT || 3000;
 
 async function start() {
   await getDb(); // Initialize database
+  setupShutdownHandlers();
   server.listen(PORT, () => {
     console.log(`FM Radio Live running on http://localhost:${PORT}`);
   });

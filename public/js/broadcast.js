@@ -18,13 +18,16 @@ let masterGain = null;
 // EQ nodes
 let eqLow = null, eqMid = null, eqHigh = null;
 
-// Playlist
+// Playlist - dual audio elements for seamless transitions
 let playlist = [];
 let currentTrackIndex = -1;
 let playlistLoop = false;
-let playlistAudio = null;
 let playlistGain = null;
 let playlistStream = null;
+
+let audioEls = [null, null];
+let activeAudioIdx = 0;
+let nextPreloadedIdx = -1;
 
 // AI Announcer
 let aiAutoMode = false;
@@ -44,11 +47,39 @@ async function init() {
     } else { window.location.href = '/login'; }
   } catch (e) {}
 
-  playlistAudio = document.getElementById('playlistAudioElement');
+  audioEls[0] = document.getElementById('playlistAudio1');
+  audioEls[1] = document.getElementById('playlistAudio2');
+
+  // Setup audio ended listeners
+  audioEls[0].addEventListener('ended', onAudioEnded);
+  audioEls[1].addEventListener('ended', onAudioEnded);
+
+  // Listen for play events to auto-reconnect pipeline
+  audioEls[0].addEventListener('play', onAudioPlay);
+  audioEls[1].addEventListener('play', onAudioPlay);
+
   document.getElementById('playlistFiles').addEventListener('change', handlePlaylistFiles);
-  playlistAudio.addEventListener('timeupdate', updatePlaylistProgress);
-  playlistAudio.addEventListener('loadedmetadata', onPlaylistLoaded);
-  playlistAudio.addEventListener('ended', onPlaylistEnded);
+}
+
+function getActiveAudio() { return audioEls[activeAudioIdx]; }
+function getInactiveAudio() { return audioEls[1 - activeAudioIdx]; }
+
+function onAudioPlay() {
+  // When audio starts playing during broadcast, reconnect pipeline
+  if (isBroadcasting && !micMuted) {
+    setTimeout(reconnectPlaylistPipeline, 100);
+  }
+}
+
+function onAudioEnded() {
+  document.getElementById('playlistPlayBtn').innerHTML = '<i class="fas fa-play"></i>';
+  if (currentTrackIndex < playlist.length - 1) {
+    playTrack(currentTrackIndex + 1);
+  } else if (playlistLoop && playlist.length > 0) {
+    playTrack(0);
+  } else {
+    stopPlaylist();
+  }
 }
 
 /* ========== STUDIO TABS ========== */
@@ -100,6 +131,8 @@ function addUrlToPlaylist() {
 }
 
 function removeFromPlaylist(id) {
+  const wasCurrent = currentTrackIndex >= 0 && currentTrackIndex < playlist.length && playlist[currentTrackIndex].id === id;
+  if (wasCurrent) stopPlaylist();
   playlist = playlist.filter(s => s.id !== id);
   if (currentTrackIndex >= playlist.length) currentTrackIndex = playlist.length - 1;
   renderPlaylist();
@@ -148,24 +181,119 @@ function escapeHtml(text) {
   return d.innerHTML;
 }
 
+function preloadNextTrack() {
+  const nextIdx = currentTrackIndex + 1;
+  if (nextIdx < playlist.length) {
+    nextPreloadedIdx = nextIdx;
+    const inactive = getInactiveAudio();
+    inactive.src = playlist[nextIdx].src;
+    inactive.load();
+  } else if (playlistLoop && playlist.length > 0) {
+    nextPreloadedIdx = 0;
+    const inactive = getInactiveAudio();
+    inactive.src = playlist[0].src;
+    inactive.load();
+  } else {
+    nextPreloadedIdx = -1;
+  }
+}
+
 function playTrack(index) {
   if (index < 0 || index >= playlist.length) return;
   currentTrackIndex = index;
   const song = playlist[index];
-  playlistAudio.src = song.src;
-  playlistAudio.load();
-  playlistAudio.play();
+  const active = getActiveAudio();
+
+  active.src = song.src;
+  active.load();
+  active.play();
+
   document.getElementById('playlistCurrent').style.display = 'block';
   document.getElementById('currentTrackName').textContent = song.name;
   document.getElementById('playlistPlayBtn').innerHTML = '<i class="fas fa-pause"></i>';
+
+  // Update seek max once loaded
+  active.onloadedmetadata = () => {
+    if (getActiveAudio() === active) {
+      document.getElementById('playlistDuration').textContent = formatTime(active.duration);
+      document.getElementById('playlistSeek').max = Math.floor(active.duration);
+    }
+  };
+
+  // Time update
+  active.ontimeupdate = () => {
+    if (getActiveAudio() === active) {
+      if (!active.duration) return;
+      document.getElementById('playlistCurrentTime').textContent = formatTime(active.currentTime);
+      document.getElementById('playlistSeek').value = Math.floor(active.currentTime);
+    }
+  };
+
+  // Pre-load next track in background
+  preloadNextTrack();
   renderPlaylist();
 }
 
 function playNextTrack() {
   if (playlist.length === 0) return;
-  if (currentTrackIndex < playlist.length - 1) playTrack(currentTrackIndex + 1);
-  else if (playlistLoop) playTrack(0);
-  else stopPlaylist();
+  // If next is preloaded on inactive element, use it for instant switch
+  if (nextPreloadedIdx >= 0 && nextPreloadedIdx < playlist.length && nextPreloadedIdx !== currentTrackIndex) {
+    instantSwitchTrack(nextPreloadedIdx);
+  } else if (currentTrackIndex < playlist.length - 1) {
+    playTrack(currentTrackIndex + 1);
+  } else if (playlistLoop) {
+    playTrack(0);
+  } else {
+    stopPlaylist();
+  }
+}
+
+function instantSwitchTrack(index) {
+  if (index < 0 || index >= playlist.length) return;
+  const oldIdx = activeAudioIdx;
+  const newIdx = 1 - activeAudioIdx;
+
+  // The inactive element already has the next track pre-loaded
+  const oldEl = audioEls[oldIdx];
+  const newEl = audioEls[newIdx];
+
+  // Stop old
+  oldEl.pause();
+
+  // Switch to new
+  activeAudioIdx = newIdx;
+  currentTrackIndex = index;
+  newEl.play();
+  newEl.volume = parseFloat(document.getElementById('playlistVolume').value);
+
+  const song = playlist[index];
+  document.getElementById('currentTrackName').textContent = song.name;
+  document.getElementById('playlistPlayBtn').innerHTML = '<i class="fas fa-pause"></i>';
+
+  // Update seek
+  newEl.onloadedmetadata = () => {
+    if (getActiveAudio() === newEl) {
+      document.getElementById('playlistDuration').textContent = formatTime(newEl.duration);
+      document.getElementById('playlistSeek').max = Math.floor(newEl.duration);
+    }
+  };
+
+  newEl.ontimeupdate = () => {
+    if (getActiveAudio() === newEl) {
+      if (!newEl.duration) return;
+      document.getElementById('playlistCurrentTime').textContent = formatTime(newEl.currentTime);
+      document.getElementById('playlistSeek').value = Math.floor(newEl.currentTime);
+    }
+  };
+
+  // Reconnect pipeline if broadcasting
+  if (isBroadcasting) {
+    reconnectPlaylistPipeline();
+  }
+
+  // Pre-load next
+  preloadNextTrack();
+  renderPlaylist();
 }
 
 function playPrevTrack() {
@@ -175,47 +303,33 @@ function playPrevTrack() {
 }
 
 function togglePlaylistPlay() {
-  if (!playlistAudio.src) {
+  const active = getActiveAudio();
+  if (!active.src || active.src === window.location.href) {
     if (playlist.length > 0) { playTrack(0); }
     return;
   }
-  if (playlistAudio.paused) {
-    playlistAudio.play();
+  if (active.paused) {
+    active.play();
     document.getElementById('playlistPlayBtn').innerHTML = '<i class="fas fa-pause"></i>';
   } else {
-    playlistAudio.pause();
+    active.pause();
     document.getElementById('playlistPlayBtn').innerHTML = '<i class="fas fa-play"></i>';
   }
 }
 
 function stopPlaylist() {
-  playlistAudio.pause();
-  playlistAudio.src = '';
+  audioEls.forEach(el => { el.pause(); el.src = ''; el.onloadedmetadata = null; el.ontimeupdate = null; });
   currentTrackIndex = -1;
+  nextPreloadedIdx = -1;
+  activeAudioIdx = 0;
   document.getElementById('playlistCurrent').style.display = 'none';
   document.getElementById('playlistPlayBtn').innerHTML = '<i class="fas fa-play"></i>';
   renderPlaylist();
 }
 
-function onPlaylistLoaded() {
-  const dur = playlistAudio.duration;
-  document.getElementById('playlistDuration').textContent = formatTime(dur);
-  document.getElementById('playlistSeek').max = Math.floor(dur);
-}
-
-function updatePlaylistProgress() {
-  if (!playlistAudio.duration) return;
-  document.getElementById('playlistCurrentTime').textContent = formatTime(playlistAudio.currentTime);
-  document.getElementById('playlistSeek').value = Math.floor(playlistAudio.currentTime);
-}
-
 function seekPlaylist() {
-  playlistAudio.currentTime = parseFloat(document.getElementById('playlistSeek').value);
-}
-
-function onPlaylistEnded() {
-  document.getElementById('playlistPlayBtn').innerHTML = '<i class="fas fa-play"></i>';
-  playNextTrack();
+  const active = getActiveAudio();
+  active.currentTime = parseFloat(document.getElementById('playlistSeek').value);
 }
 
 function setPlaylistLoop() {
@@ -224,7 +338,7 @@ function setPlaylistLoop() {
 
 function setPlaylistVolume() {
   const vol = parseFloat(document.getElementById('playlistVolume').value);
-  playlistAudio.volume = vol;
+  audioEls.forEach(el => { if (el) el.volume = vol; });
   if (playlistGain) playlistGain.gain.value = vol;
 }
 
@@ -241,37 +355,25 @@ function speakNow() {
   document.getElementById('aiStatusDot').className = 'ai-status-dot active';
   document.getElementById('aiStatusText').textContent = 'AI speaking...';
   document.getElementById('aiSpeakBtn').disabled = true;
-
   speakNextAiSentence();
 }
 
 function speakNextAiSentence() {
   if (!isBroadcasting) { stopAi(); return; }
-
   if (aiSentenceIndex >= aiSentences.length) {
-    if (aiAutoMode) {
-      aiSentenceIndex = 0;
-    } else {
-      stopAi();
-      return;
-    }
+    if (aiAutoMode) { aiSentenceIndex = 0; }
+    else { stopAi(); return; }
   }
-
   const sentence = aiSentences[aiSentenceIndex];
   aiSentenceIndex++;
   aiSpeaking = true;
-
   document.getElementById('aiStatusText').textContent =
     `AI: "${sentence.substring(0, 45)}${sentence.length > 45 ? '...' : ''}"`;
 
   const lang = document.getElementById('aiLang').value;
 
-  // Try server TTS proxy first, fall back to browser SpeechSynthesis
   fetch(`/api/tts?text=${encodeURIComponent(sentence)}&lang=${encodeURIComponent(lang)}`)
-    .then(res => {
-      if (!res.ok) throw new Error('TTS proxy failed');
-      return res.arrayBuffer();
-    })
+    .then(res => { if (!res.ok) throw new Error('TTS proxy failed'); return res.arrayBuffer(); })
     .then(buffer => {
       if (!audioContext || !isBroadcasting) return;
       audioContext.decodeAudioData(buffer, audioBuffer => {
@@ -280,7 +382,6 @@ function speakNextAiSentence() {
       }, () => onAiSentenceEnd());
     })
     .catch(() => {
-      // Fallback: use browser SpeechSynthesis
       speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(sentence);
       utterance.lang = lang === 'ta' ? 'ta-IN' : lang;
@@ -295,24 +396,19 @@ function speakNextAiSentence() {
 function onAiSentenceEnd() {
   aiSpeaking = false;
   document.getElementById('aiSpeakBtn').disabled = false;
-
   if (aiAutoMode && isBroadcasting) {
     const interval = parseInt(document.getElementById('aiInterval').value) * 1000;
     if (aiTimer) clearTimeout(aiTimer);
-    aiTimer = setTimeout(() => {
-      if (aiAutoMode && isBroadcasting) speakNextAiSentence();
-    }, interval);
-  } else {
-    if (aiSentenceIndex >= aiSentences.length) {
-      stopAi();
-    }
+    aiTimer = setTimeout(() => { if (aiAutoMode && isBroadcasting) speakNextAiSentence(); }, interval);
+  } else if (aiSentenceIndex >= aiSentences.length) {
+    stopAi();
   }
 }
 
 function toggleAiAuto() {
   aiAutoMode = document.getElementById('aiAutoToggle').checked;
   document.getElementById('aiExtraOptions').style.display = aiAutoMode ? 'flex' : 'none';
-  if (aiAutoMode && isBroadcasting && aiSentences.length > 0) {
+  if (aiAutoMode && isBroadcasting && aiSentences.length === 0 && document.getElementById('aiScript').value.trim()) {
     speakNow();
   }
 }
@@ -343,10 +439,7 @@ function playAiBuffer(audioBuffer, onEnd) {
   source.connect(aiGain);
   aiGain.connect(masterGain);
   source.start();
-  source.onended = () => {
-    aiGain.disconnect();
-    if (onEnd) onEnd();
-  };
+  source.onended = () => { aiGain.disconnect(); if (onEnd) onEnd(); };
 }
 
 /* ========== EQUALIZER ========== */
@@ -403,7 +496,7 @@ async function startBroadcast() {
       const bufferSize = 4096;
       scriptProcessor = audioContext.createScriptProcessor(bufferSize, 1, 1);
 
-      // --- MICROPHONE ---
+      // --- MICROPHONE (always try) ---
       try {
         mediaStream = await navigator.mediaDevices.getUserMedia({
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 44100 }
@@ -418,10 +511,8 @@ async function startBroadcast() {
         document.getElementById('micMuteBtn').disabled = true;
       }
 
-      // --- PLAYLIST ---
-      if (playlistAudio.src && playlistAudio.src !== window.location.href && !playlistAudio.paused) {
-        connectPlaylistToPipeline();
-      }
+      // --- PLAYLIST (connect whichever audio element is playing) ---
+      connectPlaylistToPipeline();
 
       // Connect master → analyser → scriptProcessor → destination
       masterGain.connect(analyser);
@@ -466,10 +557,23 @@ async function startBroadcast() {
   }
 }
 
+function reconnectPlaylistPipeline() {
+  if (!isBroadcasting || !audioContext) return;
+  // Disconnect old playlist stream
+  if (playlistStream) { try { playlistStream.getTracks().forEach(t => t.stop()); } catch(e) {} playlistStream = null; }
+  if (playlistGain) { try { playlistGain.disconnect(); } catch(e) {} playlistGain = null; }
+  if (eqLow) { try { eqLow.disconnect(); } catch(e) {} eqLow = null; }
+  if (eqMid) { try { eqMid.disconnect(); } catch(e) {} eqMid = null; }
+  if (eqHigh) { try { eqHigh.disconnect(); } catch(e) {} eqHigh = null; }
+  connectPlaylistToPipeline();
+}
+
 function connectPlaylistToPipeline() {
   try {
-    if (!playlistAudio.src || !playlistAudio.captureStream) return;
-    const stream = playlistAudio.captureStream();
+    const active = getActiveAudio();
+    if (!active.src || !active.captureStream || active.paused || active.src === window.location.href) return;
+
+    const stream = active.captureStream();
     playlistStream = stream;
     const source = audioContext.createMediaStreamSource(stream);
 
@@ -493,6 +597,8 @@ function connectPlaylistToPipeline() {
     eqMid.connect(eqHigh);
     eqHigh.connect(playlistGain);
     playlistGain.connect(masterGain);
+
+    console.log('Playlist connected to pipeline');
   } catch(e) {
     console.warn('Could not connect playlist to pipeline:', e.message);
   }

@@ -161,4 +161,12 @@ async function initialize() {
   return wrapper;
 }
 
-module.exports = { getDb, saveDb };
+// Save database on process exit
+function setupShutdownHandlers() {
+  const saveAndExit = () => { saveDb(); process.exit(0); };
+  process.on('exit', saveDb);
+  process.on('SIGINT', () => { saveDb(); process.exit(0); });
+  process.on('SIGTERM', () => { saveDb(); process.exit(0); });
+}
+
+module.exports = { getDb, saveDb, setupShutdownHandlers };
