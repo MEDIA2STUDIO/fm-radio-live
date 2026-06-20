@@ -98,12 +98,12 @@ function toggleMicMute() {
   const text = document.getElementById('micMuteText');
   if (micMuted) {
     if (micGain) micGain.gain.value = 0;
-    btn.classList.add('btn-danger');
+    btn.classList.add('muted');
     icon.className = 'fas fa-microphone-slash';
     text.textContent = 'Unmute';
   } else {
     if (micGain) micGain.gain.value = 1;
-    btn.classList.remove('btn-danger');
+    btn.classList.remove('muted');
     icon.className = 'fas fa-microphone';
     text.textContent = 'Mute';
   }

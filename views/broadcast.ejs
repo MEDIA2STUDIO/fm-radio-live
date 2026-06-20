@@ -34,30 +34,39 @@
 
       <!-- Top section: Mic + Broadcast Stats -->
       <div class="broadcast-top-bar">
-        <div class="mic-container">
-          <button id="micButton" class="mic-button" onclick="toggleBroadcast()">
-            <i class="fas fa-microphone"></i>
-            <div class="mic-ripple" id="micRipple"></div>
-          </button>
-          <p class="mic-hint" id="micHint">Press to start broadcasting</p>
-          <div class="mic-extra-controls">
-            <button id="micMuteBtn" class="btn btn-secondary btn-sm" onclick="toggleMicMute()" title="Mute/Unmute Mic">
-              <i class="fas fa-microphone" id="micMuteIcon"></i> <span id="micMuteText">Mute</span>
+        <div class="broadcast-controls-row">
+          <div class="mic-container">
+            <button id="micButton" class="mic-button" onclick="toggleBroadcast()">
+              <i class="fas fa-microphone"></i>
+              <div class="mic-ripple" id="micRipple"></div>
+            </button>
+            <p class="mic-hint" id="micHint">Press to start broadcasting</p>
+          </div>
+          <div class="broadcast-stats">
+            <div class="stat">
+              <i class="fas fa-headphones"></i>
+              <span id="listenerCount">0</span>
+              <label>Listeners</label>
+            </div>
+            <div class="stat">
+              <i class="fas fa-clock"></i>
+              <span id="broadcastTime">00:00:00</span>
+              <label>Duration</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mic Mute Control - separate row, clearly distinct -->
+        <div class="mic-mute-control">
+          <span class="mic-mute-label"><i class="fas fa-microphone"></i> Mic Control</span>
+          <div class="mic-mute-buttons">
+            <button id="micMuteBtn" class="mic-mute-btn" onclick="toggleMicMute()" title="Mute/Unmute Microphone">
+              <i class="fas fa-microphone" id="micMuteIcon"></i>
+              <span id="micMuteText">Mute</span>
             </button>
           </div>
         </div>
-        <div class="broadcast-stats">
-          <div class="stat">
-            <i class="fas fa-headphones"></i>
-            <span id="listenerCount">0</span>
-            <label>Listeners</label>
-          </div>
-          <div class="stat">
-            <i class="fas fa-clock"></i>
-            <span id="broadcastTime">00:00:00</span>
-            <label>Duration</label>
-          </div>
-        </div>
+
         <div class="audio-visualizer" id="audioVisualizer">
           <canvas id="visualizerCanvas"></canvas>
         </div>
