@@ -152,6 +152,11 @@ async function listenToBroadcaster(broadcasterId) {
 function scheduleBuffer(audioBuffer) {
   const now = audioContext.currentTime;
 
+  // If nextPlayTime is too far ahead (gap from transition), reset it
+  if (nextPlayTime > now + 0.3) {
+    nextPlayTime = now + 0.05;
+  }
+
   if (nextPlayTime < now) {
     nextPlayTime = now + 0.05;
   }

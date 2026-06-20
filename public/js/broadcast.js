@@ -14,6 +14,7 @@ let micMuted = false;
 
 // Master
 let masterGain = null;
+let compressor = null;
 
 // EQ nodes
 let eqLow = null, eqMid = null, eqHigh = null;
@@ -466,6 +467,7 @@ function cleanupAudioPipeline() {
   if (eqMid) { try { eqMid.disconnect(); } catch(e) {} eqMid = null; }
   if (eqHigh) { try { eqHigh.disconnect(); } catch(e) {} eqHigh = null; }
   if (masterGain) { try { masterGain.disconnect(); } catch(e) {} masterGain = null; }
+  if (compressor) { try { compressor.disconnect(); } catch(e) {} compressor = null; }
   if (analyser) { try { analyser.disconnect(); } catch(e) {} analyser = null; }
   if (ws) { ws.close(); ws = null; }
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
@@ -514,9 +516,18 @@ async function startBroadcast() {
       // --- PLAYLIST (connect whichever audio element is playing) ---
       connectPlaylistToPipeline();
 
-      // Connect master → analyser → scriptProcessor → destination
-      masterGain.connect(analyser);
-      masterGain.connect(scriptProcessor);
+      // Auto Level Control (Dynamics Compressor)
+      compressor = audioContext.createDynamicsCompressor();
+      compressor.threshold.value = -24;
+      compressor.knee.value = 30;
+      compressor.ratio.value = 12;
+      compressor.attack.value = 0.003;
+      compressor.release.value = 0.25;
+
+      // Connect master → compressor → analyser + scriptProcessor
+      masterGain.connect(compressor);
+      compressor.connect(analyser);
+      compressor.connect(scriptProcessor);
       scriptProcessor.connect(audioContext.destination);
 
       scriptProcessor.onaudioprocess = (e) => {
@@ -559,13 +570,21 @@ async function startBroadcast() {
 
 function reconnectPlaylistPipeline() {
   if (!isBroadcasting || !audioContext) return;
-  // Disconnect old playlist stream
-  if (playlistStream) { try { playlistStream.getTracks().forEach(t => t.stop()); } catch(e) {} playlistStream = null; }
+  // Remember old stream to overlap it with new (avoid listener gap)
+  const oldStream = playlistStream;
+  // Disconnect old pipeline nodes (but masterGain still has old audio briefly)
   if (playlistGain) { try { playlistGain.disconnect(); } catch(e) {} playlistGain = null; }
   if (eqLow) { try { eqLow.disconnect(); } catch(e) {} eqLow = null; }
   if (eqMid) { try { eqMid.disconnect(); } catch(e) {} eqMid = null; }
   if (eqHigh) { try { eqHigh.disconnect(); } catch(e) {} eqHigh = null; }
+  // Connect new pipeline first
   connectPlaylistToPipeline();
+  // Stop old stream after brief overlap (ensures no silence gap)
+  if (oldStream) {
+    setTimeout(() => {
+      try { oldStream.getTracks().forEach(t => t.stop()); } catch(e) {}
+    }, 200);
+  }
 }
 
 function connectPlaylistToPipeline() {
