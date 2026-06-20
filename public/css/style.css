@@ -1733,6 +1733,71 @@ footer {
   margin-bottom: 1rem;
 }
 
+.mic-extra-controls {
+  margin-top: 0.75rem;
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+/* AI button row */
+.ai-button-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.ai-auto-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--gray);
+  user-select: none;
+}
+
+.ai-auto-label input[type="checkbox"] {
+  accent-color: var(--primary);
+  width: 16px;
+  height: 16px;
+}
+
+.ai-auto-label i {
+  color: var(--primary);
+}
+
+.ai-extra-options {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--gray);
+}
+
+.ai-extra-options .form-input {
+  width: 80px;
+  padding: 0.4rem;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 0.8rem;
+  outline: none;
+}
+
+.ai-extra-options .form-input:focus {
+  border-color: var(--primary);
+}
+
+/* Mic mute button */
+.btn-danger {
+  background: var(--danger) !important;
+  border-color: var(--danger) !important;
+}
+
 /* ============ Responsive additions ============ */
 @media (max-width: 768px) {
   .studio-tabs {
@@ -1774,6 +1839,15 @@ footer {
 
   .ai-option {
     min-width: 0;
+  }
+
+  .ai-button-row {
+    flex-wrap: wrap;
+  }
+
+  .mic-extra-controls {
+    flex-direction: column;
+    align-items: center;
   }
 }
 

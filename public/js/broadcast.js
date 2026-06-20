@@ -10,6 +10,7 @@ let timerInterval = null;
 
 // Mic
 let micGain = null;
+let micMuted = false;
 
 // Master
 let masterGain = null;
@@ -26,10 +27,11 @@ let playlistGain = null;
 let playlistStream = null;
 
 // AI Announcer
-let aiEnabled = false;
+let aiAutoMode = false;
 let aiSpeaking = false;
 let aiTimer = null;
 let aiSentenceIndex = 0;
+let aiSentences = [];
 
 /* ========== INIT ========== */
 async function init() {
@@ -43,8 +45,6 @@ async function init() {
   } catch (e) {}
 
   playlistAudio = document.getElementById('playlistAudioElement');
-
-  // Playlist file input
   document.getElementById('playlistFiles').addEventListener('change', handlePlaylistFiles);
   playlistAudio.addEventListener('timeupdate', updatePlaylistProgress);
   playlistAudio.addEventListener('loadedmetadata', onPlaylistLoaded);
@@ -57,6 +57,25 @@ function switchStudioTab(tab) {
   document.querySelectorAll('.studio-tab-content').forEach(c => c.classList.remove('active'));
   document.querySelector(`.studio-tab[onclick*="${tab}"]`).classList.add('active');
   document.getElementById('studio' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+}
+
+/* ========== MIC MUTE ========== */
+function toggleMicMute() {
+  micMuted = !micMuted;
+  const btn = document.getElementById('micMuteBtn');
+  const icon = document.getElementById('micMuteIcon');
+  const text = document.getElementById('micMuteText');
+  if (micMuted) {
+    if (micGain) micGain.gain.value = 0;
+    btn.classList.add('btn-danger');
+    icon.className = 'fas fa-microphone-slash';
+    text.textContent = 'Unmute';
+  } else {
+    if (micGain) micGain.gain.value = 1;
+    btn.classList.remove('btn-danger');
+    icon.className = 'fas fa-microphone';
+    text.textContent = 'Mute';
+  }
 }
 
 /* ========== PLAYLIST ========== */
@@ -100,14 +119,11 @@ function movePlaylistItem(id, dir) {
 function renderPlaylist() {
   const queue = document.getElementById('playlistQueue');
   document.getElementById('playlistCount').textContent = playlist.length;
-
   if (playlist.length === 0) {
     queue.innerHTML = '<p class="playlist-empty">No songs in playlist. Upload MP3 files or add a URL.</p>';
     return;
   }
-
   const hasCurrent = currentTrackIndex >= 0 && currentTrackIndex < playlist.length;
-
   queue.innerHTML = playlist.map((song, i) => `
     <div class="playlist-item ${i === currentTrackIndex && hasCurrent ? 'playing' : ''}">
       <div class="playlist-item-info">
@@ -149,7 +165,7 @@ function playNextTrack() {
   if (playlist.length === 0) return;
   if (currentTrackIndex < playlist.length - 1) playTrack(currentTrackIndex + 1);
   else if (playlistLoop) playTrack(0);
-  else { stopPlaylist(); }
+  else stopPlaylist();
 }
 
 function playPrevTrack() {
@@ -208,84 +224,113 @@ function setPlaylistLoop() {
 
 function setPlaylistVolume() {
   const vol = parseFloat(document.getElementById('playlistVolume').value);
-  if (playlistAudio) playlistAudio.volume = vol;
+  playlistAudio.volume = vol;
+  if (playlistGain) playlistGain.gain.value = vol;
 }
 
 /* ========== AI ANNOUNCER ========== */
-function toggleAi() {
-  aiEnabled = document.getElementById('aiToggle').checked;
-  if (aiEnabled) {
-    startAi();
-  } else {
-    stopAi();
-  }
-}
-
-function startAi() {
+function speakNow() {
+  if (!isBroadcasting) { alert('Start broadcasting first'); return; }
   const script = document.getElementById('aiScript').value.trim();
-  if (!script) { document.getElementById('aiToggle').checked = false; aiEnabled = false; return; }
+  if (!script) { alert('Enter a script first'); return; }
 
-  const sentences = script.split(/[.!?।\n]+/).map(s => s.trim()).filter(s => s.length > 0);
-  if (sentences.length === 0) { document.getElementById('aiToggle').checked = false; aiEnabled = false; return; }
+  aiSentences = script.split(/[.!?।\n]+/).map(s => s.trim()).filter(s => s.length > 0);
+  if (aiSentences.length === 0) { alert('Script has no valid sentences'); return; }
 
   aiSentenceIndex = 0;
   document.getElementById('aiStatusDot').className = 'ai-status-dot active';
-  document.getElementById('aiStatusText').textContent = 'AI is speaking...';
+  document.getElementById('aiStatusText').textContent = 'AI speaking...';
+  document.getElementById('aiSpeakBtn').disabled = true;
 
-  speakNextAiSentence(sentences);
+  speakNextAiSentence();
 }
 
-function speakNextAiSentence(sentences) {
-  if (!aiEnabled || !isBroadcasting) { stopAi(); return; }
+function speakNextAiSentence() {
+  if (!isBroadcasting) { stopAi(); return; }
 
-  if (aiSentenceIndex >= sentences.length) {
-    aiSentenceIndex = 0; // Loop back
-    // If no sentences, stop
-    if (sentences.length === 0) { stopAi(); return; }
+  if (aiSentenceIndex >= aiSentences.length) {
+    if (aiAutoMode) {
+      aiSentenceIndex = 0;
+    } else {
+      stopAi();
+      return;
+    }
   }
 
-  const sentence = sentences[aiSentenceIndex];
+  const sentence = aiSentences[aiSentenceIndex];
   aiSentenceIndex++;
-
   aiSpeaking = true;
-  document.getElementById('aiStatusText').textContent = `AI: "${sentence.substring(0, 50)}${sentence.length > 50 ? '...' : ''}"`;
 
-  // Fetch TTS audio from server
+  document.getElementById('aiStatusText').textContent =
+    `AI: "${sentence.substring(0, 45)}${sentence.length > 45 ? '...' : ''}"`;
+
   const lang = document.getElementById('aiLang').value;
+
+  // Try server TTS proxy first, fall back to browser SpeechSynthesis
   fetch(`/api/tts?text=${encodeURIComponent(sentence)}&lang=${encodeURIComponent(lang)}`)
     .then(res => {
-      if (!res.ok) throw new Error('TTS failed');
+      if (!res.ok) throw new Error('TTS proxy failed');
       return res.arrayBuffer();
     })
     .then(buffer => {
       if (!audioContext || !isBroadcasting) return;
-      audioContext.decodeAudioData(buffer, (audioBuffer) => {
+      audioContext.decodeAudioData(buffer, audioBuffer => {
         if (!audioContext || !isBroadcasting) return;
-        playAiBuffer(audioBuffer, () => {
-          aiSpeaking = false;
-          // Schedule next sentence after interval
-          const interval = parseInt(document.getElementById('aiInterval').value) * 1000;
-          if (aiTimer) clearTimeout(aiTimer);
-          if (aiEnabled && isBroadcasting) {
-            aiTimer = setTimeout(() => speakNextAiSentence(sentences), interval);
-          }
-        });
-      }, () => {
-        aiSpeaking = false;
-        if (aiEnabled && isBroadcasting) {
-          const interval = parseInt(document.getElementById('aiInterval').value) * 1000;
-          aiTimer = setTimeout(() => speakNextAiSentence(sentences), interval);
-        }
-      });
+        playAiBuffer(audioBuffer, onAiSentenceEnd);
+      }, () => onAiSentenceEnd());
     })
-    .catch(err => {
-      console.error('AI TTS error:', err);
-      aiSpeaking = false;
-      document.getElementById('aiStatusText').textContent = 'AI: TTS error, retrying...';
-      if (aiEnabled && isBroadcasting) {
-        aiTimer = setTimeout(() => speakNextAiSentence(sentences), 3000);
-      }
+    .catch(() => {
+      // Fallback: use browser SpeechSynthesis
+      speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(sentence);
+      utterance.lang = lang === 'ta' ? 'ta-IN' : lang;
+      utterance.rate = parseFloat(document.getElementById('aiSpeed').value);
+      utterance.volume = parseFloat(document.getElementById('aiVolume').value);
+      utterance.onend = onAiSentenceEnd;
+      utterance.onerror = onAiSentenceEnd;
+      speechSynthesis.speak(utterance);
     });
+}
+
+function onAiSentenceEnd() {
+  aiSpeaking = false;
+  document.getElementById('aiSpeakBtn').disabled = false;
+
+  if (aiAutoMode && isBroadcasting) {
+    const interval = parseInt(document.getElementById('aiInterval').value) * 1000;
+    if (aiTimer) clearTimeout(aiTimer);
+    aiTimer = setTimeout(() => {
+      if (aiAutoMode && isBroadcasting) speakNextAiSentence();
+    }, interval);
+  } else {
+    if (aiSentenceIndex >= aiSentences.length) {
+      stopAi();
+    }
+  }
+}
+
+function toggleAiAuto() {
+  aiAutoMode = document.getElementById('aiAutoToggle').checked;
+  document.getElementById('aiExtraOptions').style.display = aiAutoMode ? 'flex' : 'none';
+  if (aiAutoMode && isBroadcasting && aiSentences.length > 0) {
+    speakNow();
+  }
+}
+
+function stopAi() {
+  aiAutoMode = false;
+  if (document.getElementById('aiAutoToggle')) document.getElementById('aiAutoToggle').checked = false;
+  document.getElementById('aiExtraOptions').style.display = 'none';
+  speechSynthesis.cancel();
+  if (aiTimer) { clearTimeout(aiTimer); aiTimer = null; }
+  aiSpeaking = false;
+  aiSentenceIndex = 0;
+  aiSentences = [];
+  document.getElementById('aiSpeakBtn').disabled = false;
+  const dot = document.getElementById('aiStatusDot');
+  const txt = document.getElementById('aiStatusText');
+  if (dot) dot.className = 'ai-status-dot';
+  if (txt) txt.textContent = 'Press Speak Now to announce';
 }
 
 function playAiBuffer(audioBuffer, onEnd) {
@@ -304,18 +349,6 @@ function playAiBuffer(audioBuffer, onEnd) {
   };
 }
 
-function stopAi() {
-  aiEnabled = false;
-  if (document.getElementById('aiToggle')) document.getElementById('aiToggle').checked = false;
-  if (aiTimer) { clearTimeout(aiTimer); aiTimer = null; }
-  aiSpeaking = false;
-  aiSentenceIndex = 0;
-  const dot = document.getElementById('aiStatusDot');
-  const txt = document.getElementById('aiStatusText');
-  if (dot) dot.className = 'ai-status-dot';
-  if (txt) txt.textContent = 'AI is idle';
-}
-
 /* ========== EQUALIZER ========== */
 function setEqBand(band) {
   const val = parseFloat(document.getElementById('eq' + band).value);
@@ -326,8 +359,8 @@ function setEqBand(band) {
 
 /* ========== BROADCAST ========== */
 async function toggleBroadcast() {
-  if (isBroadcasting) { stopBroadcast(); }
-  else { startBroadcast(); }
+  if (isBroadcasting) stopBroadcast();
+  else startBroadcast();
 }
 
 function cleanupAudioPipeline() {
@@ -361,11 +394,9 @@ async function startBroadcast() {
       audioContext = new (window.AudioContext || window.webkitAudioContext)();
       if (audioContext.state === 'suspended') await audioContext.resume();
 
-      // Master gain - all sources mix here
       masterGain = audioContext.createGain();
       masterGain.gain.value = 1;
 
-      // Analyser
       analyser = audioContext.createAnalyser();
       analyser.fftSize = 256;
 
@@ -379,14 +410,15 @@ async function startBroadcast() {
         });
         const micSource = audioContext.createMediaStreamSource(mediaStream);
         micGain = audioContext.createGain();
-        micGain.gain.value = 1;
+        micGain.gain.value = micMuted ? 0 : 1;
         micSource.connect(micGain);
         micGain.connect(masterGain);
       } catch (micErr) {
         console.warn('Mic not available');
+        document.getElementById('micMuteBtn').disabled = true;
       }
 
-      // --- PLAYLIST (EQ + gain) ---
+      // --- PLAYLIST ---
       if (playlistAudio.src && playlistAudio.src !== window.location.href && !playlistAudio.paused) {
         connectPlaylistToPipeline();
       }
@@ -396,7 +428,6 @@ async function startBroadcast() {
       masterGain.connect(scriptProcessor);
       scriptProcessor.connect(audioContext.destination);
 
-      // Stream audio
       scriptProcessor.onaudioprocess = (e) => {
         if (!isBroadcasting || ws.readyState !== WebSocket.OPEN) return;
         const inputData = e.inputBuffer.getChannelData(0);
@@ -416,11 +447,6 @@ async function startBroadcast() {
       startTime = Date.now();
       timerInterval = setInterval(updateTimer, 1000);
       visualize();
-
-      // Start AI if enabled
-      if (aiEnabled && document.getElementById('aiToggle').checked) {
-        startAi();
-      }
     };
 
     ws.onmessage = (e) => {
@@ -443,12 +469,10 @@ async function startBroadcast() {
 function connectPlaylistToPipeline() {
   try {
     if (!playlistAudio.src || !playlistAudio.captureStream) return;
-
     const stream = playlistAudio.captureStream();
     playlistStream = stream;
     const source = audioContext.createMediaStreamSource(stream);
 
-    // Create EQ chain
     eqLow = audioContext.createBiquadFilter();
     eqLow.type = 'lowshelf'; eqLow.frequency.value = 200;
     eqLow.gain.value = parseFloat(document.getElementById('eqLow').value);
@@ -462,7 +486,7 @@ function connectPlaylistToPipeline() {
     eqHigh.gain.value = parseFloat(document.getElementById('eqHigh').value);
 
     playlistGain = audioContext.createGain();
-    playlistGain.gain.value = 1;
+    playlistGain.gain.value = parseFloat(document.getElementById('playlistVolume').value);
 
     source.connect(eqLow);
     eqLow.connect(eqMid);

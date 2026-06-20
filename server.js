@@ -174,7 +174,9 @@ app.get('/api/tts', async (req, res) => {
     if (!text) return res.status(400).json({ error: 'Text required' });
 
     const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${encodeURIComponent(lang)}&client=tw-ob`;
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+    });
     if (!response.ok) return res.status(502).json({ error: 'TTS failed' });
 
     const audioBuffer = await response.arrayBuffer();

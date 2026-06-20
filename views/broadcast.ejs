@@ -40,6 +40,11 @@
             <div class="mic-ripple" id="micRipple"></div>
           </button>
           <p class="mic-hint" id="micHint">Press to start broadcasting</p>
+          <div class="mic-extra-controls">
+            <button id="micMuteBtn" class="btn btn-secondary btn-sm" onclick="toggleMicMute()" title="Mute/Unmute Mic">
+              <i class="fas fa-microphone" id="micMuteIcon"></i> <span id="micMuteText">Mute</span>
+            </button>
+          </div>
         </div>
         <div class="broadcast-stats">
           <div class="stat">
@@ -120,10 +125,6 @@
         <div class="ai-section">
           <div class="ai-header">
             <span><i class="fas fa-robot"></i> AI Announcer</span>
-            <label class="ai-toggle">
-              <input type="checkbox" id="aiToggle" onchange="toggleAi()">
-              <span class="toggle-slider"></span>
-            </label>
           </div>
 
           <div class="ai-controls">
@@ -152,24 +153,36 @@
                   <option value="1.5">Very Fast</option>
                 </select>
               </div>
-              <div class="ai-option">
-                <label>Interval (sec)</label>
-                <select id="aiInterval" class="form-input">
-                  <option value="5">5</option>
-                  <option value="10" selected>10</option>
-                  <option value="15">15</option>
-                  <option value="30">30</option>
-                  <option value="60">60</option>
-                </select>
-              </div>
               <div class="ai-option ai-volume-opt">
                 <label><i class="fas fa-volume-up"></i></label>
                 <input type="range" id="aiVolume" min="0" max="1" step="0.05" value="0.8">
               </div>
             </div>
+
+            <div class="ai-button-row">
+              <button id="aiSpeakBtn" class="btn btn-primary" onclick="speakNow()">
+                <i class="fas fa-play"></i> Speak Now
+              </button>
+              <label class="ai-auto-label">
+                <input type="checkbox" id="aiAutoToggle" onchange="toggleAiAuto()">
+                <i class="fas fa-sync-alt"></i> Auto
+              </label>
+            </div>
+
+            <div class="ai-extra-options" id="aiExtraOptions" style="display:none">
+              <label>Interval (sec)</label>
+              <select id="aiInterval" class="form-input">
+                <option value="5">5</option>
+                <option value="10" selected>10</option>
+                <option value="15">15</option>
+                <option value="30">30</option>
+                <option value="60">60</option>
+              </select>
+            </div>
+
             <div class="ai-status" id="aiStatus">
               <span class="ai-status-dot" id="aiStatusDot"></span>
-              <span id="aiStatusText">AI is idle</span>
+              <span id="aiStatusText">Press Speak Now to announce</span>
             </div>
           </div>
         </div>
