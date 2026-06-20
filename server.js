@@ -10,6 +10,7 @@ const broadcastRoutes = require('./routes/broadcast');
 const { verifyToken, verifyAdmin } = require('./middleware/auth');
 const { PersistentBroadcast, persistentBroadcasts, savedPlaylists } = require('./persistent-broadcast');
 const multer = require('multer');
+const activeSessions = require('./session-store');
 
 const app = express();
 const server = http.createServer(app);
@@ -88,6 +89,7 @@ wss.on('connection', (ws, req) => {
       }
     });
     ws.on('close', () => {
+      activeSessions.delete(userId);
       broadcasters.delete(userId);
       console.log(`Broadcaster ${userId} disconnected`);
 

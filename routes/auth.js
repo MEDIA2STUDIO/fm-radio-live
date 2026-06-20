@@ -3,6 +3,18 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { getDb } = require('../database');
 const { JWT_SECRET, verifyToken } = require('../middleware/auth');
+const activeSessions = require('../session-store');
+
+// Clean stale sessions every 30 minutes
+setInterval(() => {
+  const now = Date.now();
+  const staleTimeout = 24 * 60 * 60 * 1000; // 24 hours
+  for (const [userId, session] of activeSessions) {
+    if (now - session.loginTime > staleTimeout) {
+      activeSessions.delete(userId);
+    }
+  }
+}, 30 * 60 * 1000);
 
 const router = express.Router();
 
@@ -69,11 +81,19 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ error: 'Account is disabled' });
     }
 
+    // Single session enforcement: reject if user already has an active session
+    const userIdStr = String(user.id);
+    if (activeSessions.has(userIdStr)) {
+      return res.status(409).json({ error: 'User already logged in from another device. Logout first.' });
+    }
+
     const token = jwt.sign(
       { id: user.id, username: user.username, role: user.role },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
+
+    activeSessions.set(userIdStr, { token, loginTime: Date.now() });
 
     res.cookie('token', token, { httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 });
     res.json({
@@ -88,7 +108,8 @@ router.post('/login', async (req, res) => {
 });
 
 // Logout
-router.post('/logout', (req, res) => {
+router.post('/logout', verifyToken, (req, res) => {
+  activeSessions.delete(String(req.user.id));
   res.clearCookie('token');
   res.json({ success: true });
 });
