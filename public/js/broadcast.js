@@ -157,7 +157,7 @@ async function stopPersistentBroadcast() {
 
 function onAudioPlay() {
   // When audio starts playing during broadcast, reconnect pipeline
-  if (isBroadcasting && !micMuted) {
+  if (isBroadcasting) {
     setTimeout(reconnectPlaylistPipeline, 100);
   }
 }
@@ -204,6 +204,7 @@ function toggleMicMute() {
 async function handlePlaylistFiles(e) {
   const files = Array.from(e.target.files);
   let added = 0;
+  let failed = 0;
   for (const file of files) {
     if (!file.type.includes('audio') && !file.name.endsWith('.mp3')) continue;
     try {
@@ -214,14 +215,19 @@ async function handlePlaylistFiles(e) {
       if (data.success) {
         playlist.push({ id: Date.now() + Math.random(), name: data.name, src: data.path, type: 'file' });
         added++;
+      } else {
+        failed++;
       }
     } catch (err) {
-      console.warn('Upload failed:', err.message);
+      failed++;
     }
   }
   if (added > 0) {
     renderPlaylist();
     await savePlaylistToServer();
+  }
+  if (failed > 0) {
+    alert(`${failed} file(s) upload failed. Make sure they are valid MP3 files.`);
   }
 }
 
@@ -676,21 +682,14 @@ async function startBroadcast() {
 
 function reconnectPlaylistPipeline() {
   if (!isBroadcasting || !audioContext) return;
-  // Remember old stream to overlap it with new (avoid listener gap)
-  const oldStream = playlistStream;
-  // Disconnect old pipeline nodes (but masterGain still has old audio briefly)
+  // Disconnect old pipeline
+  if (playlistStream) { try { playlistStream.getTracks().forEach(t => t.stop()); } catch(e) {} playlistStream = null; }
   if (playlistGain) { try { playlistGain.disconnect(); } catch(e) {} playlistGain = null; }
   if (eqLow) { try { eqLow.disconnect(); } catch(e) {} eqLow = null; }
   if (eqMid) { try { eqMid.disconnect(); } catch(e) {} eqMid = null; }
   if (eqHigh) { try { eqHigh.disconnect(); } catch(e) {} eqHigh = null; }
-  // Connect new pipeline first
+  // Connect new pipeline
   connectPlaylistToPipeline();
-  // Stop old stream after brief overlap (ensures no silence gap)
-  if (oldStream) {
-    setTimeout(() => {
-      try { oldStream.getTracks().forEach(t => t.stop()); } catch(e) {}
-    }, 200);
-  }
 }
 
 function connectPlaylistToPipeline() {

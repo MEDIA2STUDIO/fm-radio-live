@@ -40,8 +40,12 @@ app.get('/admin', verifyToken, verifyAdmin, (req, res) => res.render('admin'));
 app.get('/admin/login', (req, res) => res.render('admin-login'));
 
 // Multer config for MP3 upload
+const uploadDir = path.join(__dirname, 'public', 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, 'public', 'uploads')),
+  destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
 });
 const upload = multer({ storage, fileFilter: (req, file, cb) => {
@@ -242,9 +246,14 @@ app.get('/api/tts', async (req, res) => {
 });
 
 // File upload endpoint
-app.post('/api/upload', verifyToken, upload.single('file'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  res.json({ success: true, path: '/uploads/' + req.file.filename, name: req.file.originalname });
+app.post('/api/upload', verifyToken, (req, res) => {
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message || 'Upload failed' });
+    }
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    res.json({ success: true, path: '/uploads/' + req.file.filename, name: req.file.originalname });
+  });
 });
 
 // Get persistent broadcast status for current user
