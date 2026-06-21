@@ -65,6 +65,9 @@ async function init() {
 
   document.getElementById('playlistFiles').addEventListener('change', handlePlaylistFiles);
 
+  // Load playlist from local storage
+  loadPlaylistFromLocal();
+
   // Check if there's a persistent broadcast running
   checkPersistentBroadcast();
 }
@@ -75,7 +78,6 @@ function getInactiveAudio() { return audioEls[1 - activeAudioIdx]; }
 /* ========== PERSISTENT BROADCAST ========== */
 async function savePlaylistToServer() {
   try {
-    // Only save songs with server-accessible paths (skip blob URLs)
     const serializable = playlist
       .filter(s => s.src && !s.src.startsWith('blob:'))
       .map(s => ({ name: s.name, src: s.src, type: s.type || 'file' }));
@@ -205,30 +207,15 @@ function toggleMicMute() {
 async function handlePlaylistFiles(e) {
   const files = Array.from(e.target.files);
   let added = 0;
-  let failed = 0;
   for (const file of files) {
     if (!file.type.includes('audio') && !file.name.endsWith('.mp3')) continue;
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
-      const data = await res.json();
-      if (data.success) {
-        playlist.push({ id: Date.now() + Math.random(), name: data.name, src: data.path, type: 'file' });
-        added++;
-      } else {
-        failed++;
-      }
-    } catch (err) {
-      failed++;
-    }
+    const blobUrl = URL.createObjectURL(file);
+    playlist.push({ id: Date.now() + Math.random(), name: file.name, src: blobUrl, type: 'local' });
+    added++;
   }
   if (added > 0) {
     renderPlaylist();
-    await savePlaylistToServer();
-  }
-  if (failed > 0) {
-    alert(`${failed} file(s) upload failed. Make sure they are valid MP3 files.`);
+    savePlaylistToLocal();
   }
 }
 
@@ -240,36 +227,24 @@ function addUrlToPlaylist() {
   playlist.push({ id: Date.now() + Math.random(), name, src: url, type: 'url' });
   input.value = '';
   renderPlaylist();
-  savePlaylistToServer();
+  savePlaylistToLocal();
 }
 
-async function importFromDrive() {
-  const input = document.getElementById('playlistGdriveInput');
-  const url = input.value.trim();
-  if (!url) return;
-  const btn = input.nextElementSibling;
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing...';
+function savePlaylistToLocal() {
   try {
-    const res = await fetch('/api/import-gdrive', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url })
-    });
-    const data = await res.json();
-    if (data.success) {
-      playlist.push({ id: Date.now() + Math.random(), name: data.name, src: data.path, type: 'url' });
+    const serializable = playlist.filter(s => s.src && !s.src.startsWith('blob:'));
+    localStorage.setItem('fm-radio-playlist', JSON.stringify(serializable));
+  } catch (e) {}
+}
+
+function loadPlaylistFromLocal() {
+  try {
+    const saved = localStorage.getItem('fm-radio-playlist');
+    if (saved) {
+      playlist = JSON.parse(saved);
       renderPlaylist();
-      savePlaylistToServer();
-      input.value = '';
-    } else {
-      alert('Import failed: ' + (data.error || 'Unknown error'));
     }
-  } catch (err) {
-    alert('Import error: ' + err.message);
-  }
-  btn.disabled = false;
-  btn.innerHTML = '<i class="fab fa-google-drive"></i> Import from Drive';
+  } catch (e) {}
 }
 
 function removeFromPlaylist(id) {
@@ -278,7 +253,7 @@ function removeFromPlaylist(id) {
   playlist = playlist.filter(s => s.id !== id);
   if (currentTrackIndex >= playlist.length) currentTrackIndex = playlist.length - 1;
   renderPlaylist();
-  savePlaylistToServer();
+  savePlaylistToLocal();
 }
 
 function movePlaylistItem(id, dir) {
@@ -290,7 +265,7 @@ function movePlaylistItem(id, dir) {
   if (currentTrackIndex === idx) currentTrackIndex = newIdx;
   else if (currentTrackIndex === newIdx) currentTrackIndex = idx;
   renderPlaylist();
-  savePlaylistToServer();
+  savePlaylistToLocal();
 }
 
 function renderPlaylist() {
@@ -645,7 +620,13 @@ async function startBroadcast() {
       // --- MICROPHONE (always try) ---
       try {
         mediaStream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, sampleRate: 44100 }
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 48000,
+            channelCount: 1
+          }
         });
         const micSource = audioContext.createMediaStreamSource(mediaStream);
         micGain = audioContext.createGain();
@@ -660,18 +641,32 @@ async function startBroadcast() {
       // --- PLAYLIST (connect whichever audio element is playing) ---
       connectPlaylistToPipeline();
 
-      // Auto Level Control (Dynamics Compressor)
-      compressor = audioContext.createDynamicsCompressor();
-      compressor.threshold.value = -24;
-      compressor.knee.value = 30;
-      compressor.ratio.value = 12;
-      compressor.attack.value = 0.003;
-      compressor.release.value = 0.25;
+      // Pre-gain stage for consistent volume
+      const preGain = audioContext.createGain();
+      preGain.gain.value = 1.5;
 
-      // Connect master → compressor → analyser + scriptProcessor
-      masterGain.connect(compressor);
-      compressor.connect(analyser);
-      compressor.connect(scriptProcessor);
+      // Auto Level Control (Dynamics Compressor) — gentler for better sound quality
+      compressor = audioContext.createDynamicsCompressor();
+      compressor.threshold.value = -18;
+      compressor.knee.value = 40;
+      compressor.ratio.value = 6;
+      compressor.attack.value = 0.005;
+      compressor.release.value = 0.3;
+
+      // Limiter to prevent clipping
+      const limiter = audioContext.createDynamicsCompressor();
+      limiter.threshold.value = -1;
+      limiter.knee.value = 0;
+      limiter.ratio.value = 20;
+      limiter.attack.value = 0.001;
+      limiter.release.value = 0.05;
+
+      // Connect master → preGain → compressor → limiter → analyser + scriptProcessor
+      masterGain.connect(preGain);
+      preGain.connect(compressor);
+      compressor.connect(limiter);
+      limiter.connect(analyser);
+      limiter.connect(scriptProcessor);
       scriptProcessor.connect(audioContext.destination);
 
       scriptProcessor.onaudioprocess = (e) => {
@@ -692,11 +687,11 @@ async function startBroadcast() {
 
       startTime = Date.now();
       timerInterval = setInterval(updateTimer, 1000);
-      // Auto-save playlist every 5 seconds so server always has latest for persistence
+      // Save playlist to localStorage
       if (playlistSaveInterval) clearInterval(playlistSaveInterval);
       playlistSaveInterval = setInterval(() => {
         if (!isBroadcasting) return;
-        savePlaylistToServer();
+        savePlaylistToLocal();
       }, 5000);
       visualize();
     };
@@ -844,9 +839,9 @@ function formatTime(seconds) {
 }
 
 async function logout() {
-  // Save playlist for persistent broadcast before leaving
+  // Save playlist locally before leaving
   if (playlist.length > 0) {
-    await savePlaylistToServer();
+    savePlaylistToLocal();
   }
   // If broadcasting and has playlist, let server take over; stop WS without ending broadcast
   if (isBroadcasting) {

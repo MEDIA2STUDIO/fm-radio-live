@@ -124,10 +124,6 @@ class PersistentBroadcast {
 
   resolveInputPath(song) {
     if (!song || !song.src) return null;
-    if (song.src.startsWith('/api/file/')) {
-      const port = process.env.PORT || 3000;
-      return `http://localhost:${port}${song.src}`;
-    }
     if (song.src.startsWith('/uploads/') || song.src.startsWith('uploads/')) {
       return path.join(__dirname, 'public', song.src.replace(/^\//, ''));
     }

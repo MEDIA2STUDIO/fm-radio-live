@@ -93,26 +93,15 @@ async function initialize() {
     )
   `);
 
-  sqlDb.run(`
-    CREATE TABLE IF NOT EXISTS uploaded_files (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      filename TEXT NOT NULL,
-      data BLOB,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    )
-  `);
-
   // Create admin user if not exists
   const adminCheck = sqlDb.exec("SELECT id FROM users WHERE role = 'admin'");
   if (!adminCheck.length || adminCheck[0].values.length === 0) {
-    const hashedPassword = bcrypt.hashSync('admin123', 10);
+    const hashedPassword = bcrypt.hashSync('ram@1980', 10);
     sqlDb.run(
       "INSERT INTO users (username, email, password, display_name, role, location) VALUES (?, ?, ?, ?, ?, ?)",
-      ['admin', 'admin@fmradio.com', hashedPassword, 'Admin', 'admin', 'Headquarters']
+      ['ram', 'admin@fmradio.com', hashedPassword, 'Ram', 'admin', 'Studio']
     );
-    console.log('Admin user created: admin / admin123');
+    console.log('Admin user created: ram / ram@1980');
   }
 
   // Default settings
