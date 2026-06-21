@@ -778,16 +778,19 @@ async function stopBroadcast() {
 /* ========== UI ========== */
 function updateUI(broadcasting) {
   const status = document.getElementById('broadcastStatus');
+  const shareBtn = document.getElementById('shareBroadcastBtn');
   if (broadcasting) {
     document.getElementById('micButton').classList.add('active');
     document.getElementById('micHint').textContent = 'Press to stop broadcasting';
     status.innerHTML = '<span class="status-dot live"></span><span>Live</span>';
+    if (shareBtn) shareBtn.style.display = '';
   } else {
     document.getElementById('micButton').classList.remove('active');
     document.getElementById('micHint').textContent = 'Press to start broadcasting';
     status.innerHTML = '<span class="status-dot offline"></span><span>Offline</span>';
     document.getElementById('listenerCount').textContent = '0';
     document.getElementById('broadcastTime').textContent = '00:00:00';
+    if (shareBtn) shareBtn.style.display = 'none';
   }
 }
 
@@ -837,7 +840,6 @@ function formatTime(seconds) {
   const s = Math.floor(seconds % 60);
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
-
 async function logout() {
   // Save playlist locally before leaving
   if (playlist.length > 0) {
@@ -852,8 +854,24 @@ async function logout() {
   } else if (!persistentBroadcastActive) {
     // No active broadcast, just exit
   }
+
   await fetch('/api/auth/logout', { method: 'POST' });
   window.location.href = '/';
+}
+
+async function shareBroadcast() {
+  try {
+    const user = await getUser();
+    const url = `${window.location.origin}/listen?broadcaster=${user.id}`;
+    if (navigator.share) {
+      navigator.share({ title: 'FM Radio Live', text: 'Tune in to my live broadcast!', url }).catch(() => {});
+    } else if (navigator.clipboard) {
+      await navigator.clipboard.writeText(url);
+      alert('Listen link copied!');
+    } else {
+      prompt('Copy this link to share:', url);
+    }
+  } catch (_) {}
 }
 
 // Fallback: save playlist one last time when tab closes (periodic auto-save handles most cases)

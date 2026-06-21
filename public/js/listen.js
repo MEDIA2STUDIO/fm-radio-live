@@ -3,6 +3,7 @@ let audioQueue = [];
 let isPlaying = false;
 let nextPlayTime = 0;
 let currentBroadcasterId = null;
+let wsConnection = null;
 
 async function init() {
   await loadBroadcasters();
@@ -17,6 +18,10 @@ async function init() {
 }
 
 async function loadBroadcasters() {
+  // Don't rebuild list while listening (player is active)
+  if (currentBroadcasterId) {
+    return;
+  }
   try {
     const res = await fetch('/api/live');
     const data = await res.json();
@@ -53,6 +58,16 @@ async function loadBroadcasters() {
 }
 
 async function listenToBroadcaster(broadcasterId) {
+  // Prevent duplicate WebSocket to same broadcaster
+  if (currentBroadcasterId === broadcasterId) {
+    return;
+  }
+
+  // Close existing connection before creating a new one
+  if (currentBroadcasterId) {
+    stopListening(currentBroadcasterId);
+  }
+
   try {
     const res = await fetch('/api/live');
     const data = await res.json();
@@ -66,8 +81,8 @@ async function listenToBroadcaster(broadcasterId) {
     currentBroadcasterId = broadcasterId;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}?type=listener&broadcasterId=${broadcasterId}`);
-    ws.binaryType = 'arraybuffer';
+    wsConnection = new WebSocket(`${protocol}//${window.location.host}?type=listener&broadcasterId=${broadcasterId}`);
+    wsConnection.binaryType = 'arraybuffer';
 
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
     nextPlayTime = 0;
@@ -86,9 +101,15 @@ async function listenToBroadcaster(broadcasterId) {
               <p><i class="fas fa-map-marker-alt"></i> ${broadcaster.location || 'Unknown location'}</p>
             </div>
           </div>
-          <button onclick="stopListening('${broadcasterId}')" class="btn btn-secondary btn-sm">
-            <i class="fas fa-times"></i> Stop
-          </button>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span class="listener-count" style="font-size:0.85rem;color:var(--gray)"><i class="fas fa-headphones"></i> <span id="listenerCountDisplay">${broadcaster.listeners || 0}</span></span>
+            <button onclick="shareBroadcast('${broadcasterId}')" class="btn btn-sm btn-share" title="Share this broadcast">
+              <i class="fas fa-share-alt"></i>
+            </button>
+            <button onclick="stopListening('${broadcasterId}')" class="btn btn-secondary btn-sm">
+              <i class="fas fa-times"></i> Stop
+            </button>
+          </div>
         </div>
         <div class="player-visualizer">
           <canvas id="playerCanvas-${broadcasterId}"></canvas>
@@ -107,7 +128,22 @@ async function listenToBroadcaster(broadcasterId) {
     if (existingPlayer) existingPlayer.remove();
     container.insertAdjacentHTML('beforebegin', playerHtml);
 
-    ws.onmessage = (e) => {
+    wsConnection.onmessage = (e) => {
+      // Handle JSON control messages
+      if (typeof e.data === 'string') {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === 'broadcaster_live') {
+            console.log('Broadcaster is back live');
+          }
+          if (msg.type === 'listener_count') {
+            const el = document.getElementById('listenerCountDisplay');
+            if (el) el.textContent = msg.count;
+          }
+        } catch (_) {}
+        return;
+      }
+
       if (!(e.data instanceof ArrayBuffer)) return;
 
       try {
@@ -132,12 +168,12 @@ async function listenToBroadcaster(broadcasterId) {
       }
     };
 
-    ws.onclose = () => {
+    wsConnection.onclose = () => {
       console.log('Disconnected from broadcaster');
       isPlaying = false;
     };
 
-    ws.onerror = (err) => {
+    wsConnection.onerror = (err) => {
       console.error('WebSocket error:', err);
     };
 
@@ -178,9 +214,25 @@ function stopListening(broadcasterId) {
   audioQueue = [];
   nextPlayTime = 0;
 
+  if (wsConnection) {
+    wsConnection.close();
+    wsConnection = null;
+  }
+
   if (audioContext) {
     audioContext.close();
     audioContext = null;
+  }
+}
+
+function shareBroadcast(broadcasterId) {
+  const url = `${window.location.origin}/listen?broadcaster=${broadcasterId}`;
+  if (navigator.share) {
+    navigator.share({ title: 'FM Radio Live', text: 'Tune in to this live broadcast!', url }).catch(() => {});
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(() => alert('Listen link copied!')).catch(() => {});
+  } else {
+    prompt('Copy this link to share:', url);
   }
 }
 

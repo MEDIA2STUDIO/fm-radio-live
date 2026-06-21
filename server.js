@@ -65,12 +65,33 @@ wss.on('connection', (ws, req) => {
   console.log(`WebSocket connected: type=${type}, userId=${userId}`);
 
   if (type === 'broadcaster' && userId) {
+    // If a persistent broadcast is running for this user, stop it and migrate listeners
+    const existingPb = persistentBroadcasts.get(userId);
+    let migratedListeners = new Set();
+    if (existingPb) {
+      console.log(`Migrating ${existingPb.listeners.size} listeners from persistent broadcast to live broadcaster ${userId}`);
+      existingPb.listeners.forEach(l => {
+        l.broadcasterId = userId;
+        l.isPersistentListener = false;
+        migratedListeners.add(l);
+      });
+      existingPb.stop();
+      persistentBroadcasts.delete(userId);
+    }
+
     // Register broadcaster
     broadcasters.set(userId, {
       ws,
       userId,
       startTime: Date.now(),
-      listeners: new Set()
+      listeners: migratedListeners
+    });
+
+    // Notify migrated listeners that broadcaster is back live
+    migratedListeners.forEach(l => {
+      if (l.readyState === WebSocket.OPEN) {
+        l.send(JSON.stringify({ type: 'broadcaster_live', userId }));
+      }
     });
 
     // Update database
@@ -165,6 +186,11 @@ wss.on('connection', (ws, req) => {
           ws.broadcasterId = broadcasterId;
           ws.isPersistentListener = true;
           ws.send(JSON.stringify({ type: 'listener_count', count: pb.listeners.size }));
+          // Notify all persistent listeners of updated count
+          const countMsg = JSON.stringify({ type: 'listener_count', count: pb.listeners.size });
+          pb.listeners.forEach(l => {
+            if (l !== ws && l.readyState === WebSocket.OPEN) l.send(countMsg);
+          });
         }
       }
     }
@@ -186,6 +212,11 @@ wss.on('connection', (ws, req) => {
         const pb = persistentBroadcasts.get(ws.broadcasterId);
         if (pb) {
           pb.removeListener(ws);
+          // Notify remaining persistent listeners of new count
+          const countMsg = JSON.stringify({ type: 'listener_count', count: pb.listeners.size });
+          pb.listeners.forEach(l => {
+            if (l.readyState === WebSocket.OPEN) l.send(countMsg);
+          });
         }
       }
     });
@@ -208,7 +239,7 @@ app.get('/api/live', async (req, res) => {
     const liveBroadcasters = db.all(`
       SELECT u.id, u.username, u.display_name, u.location, u.avatar
       FROM users u
-      WHERE (u.is_live = 1 OR u.id IN (SELECT user_id FROM playlist_songs WHERE user_id = u.id)) AND u.role = 'broadcaster'
+      WHERE u.is_live = 1 AND u.role = 'broadcaster'
     `);
 
     res.json({

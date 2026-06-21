@@ -29,6 +29,15 @@ class PersistentBroadcast {
     this.listeners.delete(ws);
   }
 
+  stop() {
+    this.active = false;
+    if (this.ffmpegProc) {
+      try { this.ffmpegProc.kill('SIGTERM'); } catch (_) {}
+      this.ffmpegProc = null;
+    }
+    persistentBroadcasts.delete(this.userId);
+  }
+
   start() {
     if (this.playlist.length === 0) return;
     console.log(`Persistent broadcast started for user ${this.userId}, ${this.playlist.length} tracks`);
